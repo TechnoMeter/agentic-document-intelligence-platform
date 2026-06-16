@@ -1,0 +1,135 @@
+# ==========================================
+# Operating System Garbage
+# ==========================================
+Base.s
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Ehthumbs.db
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+desktop.ini
+$RECYCLE.BIN/
+
+# ==========================================
+# IDEs and Editors
+# ==========================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# ==========================================
+# Python (Backend)
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+ENV.venv/
+
+# Testing and Coverage
+.pytest_cache/
+.htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+htmlcov/
+.hypothesis/
+.audit_cache
+
+# ==========================================
+# Node.js & React (Frontend Rebuild)
+# ==========================================
+node_modules/
+jspm_packages/
+web_runtime/
+out/
+.npm
+.eslintcache
+.stylelintcache
+.prettiercache
+.parcel-cache
+.next/
+.nuxt/
+.vuepress/.temp
+.vuepress/.cache
+.turbo/
+
+# Vite build outputs
+dist/
+dist-ssr/
+*.local
+
+# ==========================================
+# Databases, Local State & Vector Stores
+# ==========================================
+# Local SQLite instances
+*.db
+*.sqlite3
+metadata.db
+
+# ChromaDB local persistence directories
+chroma_db/
+chroma_db_local/
+
+# Docker volume mounts or database dumps
+postgres_data/
+*.sql
+*.dump
+
+# ==========================================
+# Security & Environment Variables
+# ==========================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+!.env.example
+
+# ==========================================
+# Logs and Diagnostics
+# ==========================================
+*.log
+pip-log.txt
+pip-delete-this-directory.txt
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
