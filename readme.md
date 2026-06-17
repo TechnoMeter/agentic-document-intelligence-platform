@@ -45,6 +45,14 @@ This platform implements an **Autonomous Agent**. Instead of a dumb pipe, the sy
 2. *"Are they asking for a summary?"* -> It queries ChromaDB for semantic chunks and synthesizes an answer.
 3. *"Are they just saying hello?"* -> It answers conversationally without wasting database compute.
 
+### 📚 Supported File Formats
+The ingestion pipeline natively parses and vectorizes a wide array of document types without relying on heavy, external OCR APIs:
+* **Standard Text:** `.txt`, `.md`, `.rtf`, `.csv`
+* **Documents & E-Books:** `.pdf`, `.epub`, `.odt`
+* **Microsoft Office:** `.docx` (Word), `.xlsx` (Excel), `.pptx` (PowerPoint)
+* **Structured Data:** `.json`, `.html`, `.xml` (Safely parsed via BeautifulSoup to prevent vector pollution)
+
+
 ### Engineering Motivations
 1. **Cost & Latency Elimination:** We generate text embeddings *locally* via the `sentence-transformers` library and HuggingFace models. We completely bypass the OpenAI/Google embedding APIs, saving money and avoiding network bottlenecks during large file ingestion.
 2. **Zero-Latency UX:** Large AI reasoning loops take time. By utilizing a custom **Server-Sent Events (SSE)** pipeline, the AI's internal "thoughts" (tool selections) and generation tokens are streamed directly to the React UI in real-time. No loading spinners; instant feedback.
@@ -128,7 +136,7 @@ The repository is built for horizontal scalability. Here is a technical breakdow
 
 * **`main.py` (API Gateway & Streaming Control):** The ASGI entrypoint. It exposes standard RESTful endpoints for CRUD operations. Its most complex function is `stream_agent_response`, an async generator that subscribes to LangGraph's `astream_events`. It captures `on_chat_model_stream` (for text tokens) and `on_tool_start`/`on_tool_end` (for agent reasoning), formatting them into strict JSON `data: ... \n\n` SSE blocks for the frontend.
 * **`app/agent/graph.py` (Agent Logic):** The "brain". It compiles the LangGraph `StateGraph`, attaching system prompts and custom tools to `ChatGoogleGenerativeAI`. It handles the ReAct (Reason + Act) routing, allowing the LLM to recursively call tools like `search_active_documents` until it satisfies the user's prompt.
-* **`app/services/ingestion.py` (Asynchronous Data Pipeline):** Manages the `DocumentProcessor`. File ingestion is a CPU-heavy process. This module uses `asyncio.to_thread()` to isolate operations like `pypdf` extraction, `RecursiveCharacterTextSplitter` chunking, and local HuggingFace embedding generation. This ensures the FastAPI event loop is never blocked, allowing the server to handle concurrent user chats while processing massive PDFs in the background.
+* **`app/services/ingestion.py` (Asynchronous Data Pipeline):** Manages the `DocumentProcessor`. File ingestion is a CPU-heavy process. This module features a dynamic text-extraction router that parses 13 different file formats natively (utilizing `docx`, `openpyxl`, `beautifulsoup4`, `ebooklib`, etc.). It uses `asyncio.to_thread()` to isolate these extractions, `RecursiveCharacterTextSplitter` chunking, and local HuggingFace embedding generation. This ensures the FastAPI event loop is never blocked, allowing the server to handle concurrent user chats while processing massive documents in the background.
 * **`app/tools/metadata_tools.py` (Tool Registry):** Bridges the LLM's natural language output to deterministic code execution. By wrapping SQL queries (like counting active documents) in LangChain `@tool` decorators, we force the AI to fetch exact data from PostgreSQL rather than attempting to guess or hallucinate answers based on vector proximity.
 * **`tests/test_integration.py`:** The CI/CD safeguard. Simulates end-to-end user flows by uploading files, polling the metadata database to verify asynchronous ingestion completion, and validating the structural integrity of the chunked JSON Server-Sent Events stream.
 
@@ -241,7 +249,7 @@ This platform is architected to run seamlessly on a DigitalOcean Droplet. Using 
 **Step 1: Provision the Droplet**
 1. Log into DigitalOcean and create a new Droplet.
 2. Choose **Ubuntu 24.04 (LTS)**.
-3. Select a Basic Plan (A $6-$12/mo plan with 1-2GB RAM is sufficient since embeddings are processed asynchronously and we are not hosting the LLM itself).
+3. Select a Basic Plan (A $12-$24/mo plan with 2GB-4GB RAM is recommended. While embeddings are processed asynchronously, native extraction of large `.xlsx` or `.epub` files can temporarily spike memory usage).
 4. Add your SSH keys for secure access.
 
 **Step 2: Server Setup**

@@ -124,7 +124,7 @@ async def chat_stream_endpoint(request: ChatRequest):
 
 @app.post("/api/v1/upload")
 async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
-    allowed_extensions = ('.txt', '.pdf', '.md')
+    allowed_extensions = ('.txt', '.pdf', '.md'  ,'.docx','.xlsx', '.pptx', '.csv', '.json', '.html', '.xml', '.epub', '.odt', '.rtf')
     if not file.filename.lower().endswith(allowed_extensions):
         raise HTTPException(status_code=400, detail="Unsupported file format.")
     try:
