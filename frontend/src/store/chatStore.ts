@@ -16,10 +16,12 @@ interface ChatState {
   isLoading: boolean;
   currentView: ViewType;
   pendingPrompt: string | null;
+  isMobileMenuOpen: boolean;
   
   setLoading: (loading: boolean) => void;
   setView: (view: ViewType) => void;
   setPendingPrompt: (prompt: string | null) => void;
+  setMobileMenuOpen: (open: boolean) => void;
   addMessage: (message: Omit<Message, 'id'>) => void;
   updateLastMessageToken: (token: string, isStreaming?: boolean) => void;
   addThought: (thought: string) => void;
@@ -33,10 +35,12 @@ export const useChatStore = create<ChatState>((set) => ({
   isLoading: false,
   currentView: 'chat',
   pendingPrompt: null,
+  isMobileMenuOpen: false,
 
   setLoading: (loading) => set({ isLoading: loading }),
-  setView: (view) => set({ currentView: view }),
+  setView: (view) => set({ currentView: view, isMobileMenuOpen: false }),
   setPendingPrompt: (prompt) => set({ pendingPrompt: prompt }),
+  setMobileMenuOpen: (open) => set({ isMobileMenuOpen: open }),
   
   addMessage: (msg) => set((state) => ({
     messages: [...state.messages, { ...msg, id: Math.random().toString(36).substring(7) }]
