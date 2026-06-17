@@ -25,6 +25,11 @@
 
 ---
 
+![alt text](image.png)
+
+
+
+
 ## 🌐 Live Demo & Hosting
 
 This project is actively hosted and available for testing. 
@@ -103,13 +108,6 @@ graph TD
     LangGraph -. "G. Yield Event Stream" .-> API
     API -. "H. Server-Sent Events (SSE)" .-> Client
 ```
-
-<!-- 📸 SCREENSHOT PLACEHOLDER: ARCHITECTURE DIAGRAM -->
-<div align="center">
-  <img src="https://via.placeholder.com/800x400?text=Architecture+Diagram+-+Replace+with+docs/image.png" alt="Architecture Diagram">
-  <br>
-  <em>Figure 1: The pipeline visualization detailing the separation of concerns between the relational metadata layer and the vector storage layer.</em>
-</div>
 
 ---
 
