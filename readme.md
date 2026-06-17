@@ -2,6 +2,7 @@
   <!-- Status & License Badges -->
   <img src="https://img.shields.io/badge/Status-Active-success.svg?style=for-the-badge" alt="Status">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="License">
+  <img src="https://img.shields.io/badge/Deployed-DigitalOcean-0080FF.svg?style=for-the-badge&logo=digitalocean&logoColor=white" alt="DigitalOcean">
   
   <br><br>
 
@@ -22,38 +23,37 @@
 
 <br />
 
-<!-- 📸 SCREENSHOT PLACEHOLDER: MAIN DASHBOARD -->
-<div align="center">
-  <img src="https://via.placeholder.com/1200x600?text=Main+Platform+Dashboard+-+Replace+with+Chat+UI+Screenshot" alt="Main Platform Dashboard">
-  <br>
-  <em>Figure 1: The main React workspace. Features a real-time Markdown chat interface (center) and the live Agent Orchestration telemetry feed (right).</em>
-</div>
+---
 
-<br>
+## 🌐 Live Demo & Hosting
+
+This project is actively hosted and available for testing. 
+The infrastructure is provisioned on a **DigitalOcean Droplet**, utilizing the $200 infrastructure credit provided by the GitHub Student Developer Pack.
+
+👉 **[Access the Live Platform Here] (Insert Your URL/IP Here)** *(Note: The demo instance uses lightweight edge-embeddings to minimize memory footprint on the cloud server. Uploaded files are cleared on a rolling 24-hour basis).*
 
 ---
 
 ## 📖 The "What" and "Why" (ELI5)
 
-### What is this?
-Imagine a traditional AI chatbot as a student who has to read an entire library of books every time you ask a single question. It is slow, expensive, and prone to mixing up facts.
+### The Problem with Standard AI Chatbots
+Traditional RAG (Retrieval-Augmented Generation) applications are "dumb pipes." When you ask a question, they blindly convert your text into numbers (vectors), search a database for similar numbers, stuff all the resulting text into an LLM, and hope the model figures it out. This approach fails spectacularly on basic administrative queries (e.g., *"How many documents do I have?"* or *"Delete the old Q3 report and summarize the remaining ones"*).
 
-This project is an **Agentic RAG (Retrieval-Augmented Generation) Platform**. Instead of a student, imagine a highly trained **Librarian (The Agent)**. When you ask a question, the Librarian pauses and thinks:
-1. *"Are they asking for a count of our books?"* -> (Checks the database index card).
-2. *"Are they asking about a specific topic?"* -> (Goes straight to the exact paragraph in the vector database).
-3. *"Are they just saying hello?"* -> (Answers directly without searching anything).
+### The "Agentic" Solution
+This platform implements an **Autonomous Agent**. Instead of a dumb pipe, the system acts like a highly trained Research Librarian. When queried, the LangGraph orchestrator pauses to evaluate its available tools. 
+1. *"Are they asking for metadata?"* -> It executes a strict SQL query against PostgreSQL. No hallucinations.
+2. *"Are they asking for a summary?"* -> It queries ChromaDB for semantic chunks and synthesizes an answer.
+3. *"Are they just saying hello?"* -> It answers conversationally without wasting database compute.
 
-### Why did I build it this way?
-Standard RAG applications simply stuff text into an LLM and hope for the best. This architecture solves three massive enterprise problems:
-1. **Cost & Latency:** By generating text embeddings *locally* (using HuggingFace CPU models) instead of sending them to OpenAI/Cloud, we save money and remove network bottlenecks during file ingestion.
-2. **Hallucinations:** LLMs are terrible at math and counting. By decoupling strictly structured data (PostgreSQL) from semantic data (ChromaDB), we guarantee 100% accuracy when asking metadata questions like *"How many files are uploaded?"*
-3. **UX Freezing:** Large AI queries take time. We utilize **Server-Sent Events (SSE)** to stream the AI's response token-by-token back to the UI in real-time, completely eliminating loading screens.
+### Engineering Motivations
+1. **Cost & Latency Elimination:** We generate text embeddings *locally* via the `sentence-transformers` library and HuggingFace models. We completely bypass the OpenAI/Google embedding APIs, saving money and avoiding network bottlenecks during large file ingestion.
+2. **Zero-Latency UX:** Large AI reasoning loops take time. By utilizing a custom **Server-Sent Events (SSE)** pipeline, the AI's internal "thoughts" (tool selections) and generation tokens are streamed directly to the React UI in real-time. No loading spinners; instant feedback.
 
 ---
 
 ## 🏗️ System Architecture
 
-The application strictly separates the **Write Path** (heavy, asynchronous background ingestion) from the **Read Path** (autonomous LLM reasoning and execution).
+The application enforces a strict separation of concerns between the **Write Path** (heavy, asynchronous background file ingestion) and the **Read Path** (autonomous LLM reasoning, retrieval, and execution).
 
 ```mermaid
 graph TD
@@ -65,18 +65,18 @@ graph TD
     classDef agent fill:#9b59b6,stroke:#333,stroke-width:2px,color:#fff;
 
     %% Nodes
-    Client["React Frontend<br/>(Chat UI & Dashboard)"]:::frontend
+    Client["React Frontend<br/>(Zustand + SSE Hook)"]:::frontend
     API["FastAPI Gateway<br/>(Async HTTP + SSE Stream)"]:::backend
-    Worker["Ingestion Pipeline<br/>(Local HF Embeddings)"]:::backend
-    LangGraph["LangGraph State Machine<br/>(Agent Orchestrator)"]:::agent
-    MCPServer["MCP Server<br/>(Tool Provider)"]:::backend
+    Worker["Ingestion Pipeline<br/>(Threaded Text Chunking)"]:::backend
+    LangGraph["LangGraph State Machine<br/>(ReAct Orchestrator)"]:::agent
+    MCPServer["System Tool Node<br/>(SQL Provider)"]:::backend
     
     VectorDB[("ChromaDB<br/>(Semantic Vectors)")]:::db
-    SQL[("PostgreSQL<br/>(Relational Metadata)")]:::db
-    LLM["LLM Provider API<br/>(Google Gemini)"]:::external
+    SQL[("PostgreSQL<br/>(ACID Metadata)")]:::db
+    LLM["Google Gemini API<br/>(Reasoning Engine)"]:::external
 
     %% Edges - Ingestion Flow
-    Client -- "1. Upload File (Multipart)" --> API
+    Client -- "1. Upload File" --> API
     API -- "2. Background Task Trigger" --> Worker
     Worker -- "3. Save ACID Metadata" ---> SQL
     Worker -- "4. Store Chunk Embeddings" ---> VectorDB
@@ -92,7 +92,7 @@ graph TD
     MCPServer <-->|F. Secure DB Read/Write| SQL
     
     %% Streaming Response
-    LangGraph -. "G. Yield LangChain Tokens" .-> API
+    LangGraph -. "G. Yield Event Stream" .-> API
     API -. "H. Server-Sent Events (SSE)" .-> Client
 ```
 
@@ -100,7 +100,7 @@ graph TD
 <div align="center">
   <img src="https://via.placeholder.com/800x400?text=Architecture+Diagram+-+Replace+with+docs/image.png" alt="Architecture Diagram">
   <br>
-  <em>Figure 2: The pipeline visualization detailing the separation of concerns between the relational metadata layer and the vector storage layer.</em>
+  <em>Figure 1: The pipeline visualization detailing the separation of concerns between the relational metadata layer and the vector storage layer.</em>
 </div>
 
 ---
@@ -118,60 +118,56 @@ Documents are not just vectorized; their lifecycle is actively managed.
 ### 3. Decoupled Tool Endpoints & Reliability
 A common failure pattern in AI engineering is coupling REST APIs to generic wrapper libraries, causing parameter ingestion crashes (like missing model-specific tokens). Our system isolates external APIs, utilizing native SDKs specifically tailored to Gemini 3.x payload requirements, preventing 400 Bad Request errors during tool loops.
 
-<!-- 📸 SCREENSHOT PLACEHOLDER: DOCUMENT LIBRARY -->
-<div align="center">
-  <img src="https://via.placeholder.com/1000x500?text=Document+Library+Interface+-+Replace+with+Screenshot" alt="Document Library Interface">
-  <br>
-  <em>Figure 3: The Document Library. Demonstrates full CRUD capabilities, context toggling (soft-deletes), and real-time ChromeDB chunk introspection.</em>
-</div>
+---
+
+## 🔍 Core File Functionality Reference
+
+The repository is built for horizontal scalability. Here is a technical breakdown of the critical paths.
+
+### 🐍 Backend Data & Orchestration (Python / FastAPI)
+
+* **`main.py` (API Gateway & Streaming Control):** The ASGI entrypoint. It exposes standard RESTful endpoints for CRUD operations. Its most complex function is `stream_agent_response`, an async generator that subscribes to LangGraph's `astream_events`. It captures `on_chat_model_stream` (for text tokens) and `on_tool_start`/`on_tool_end` (for agent reasoning), formatting them into strict JSON `data: ... \n\n` SSE blocks for the frontend.
+* **`app/agent/graph.py` (Agent Logic):** The "brain". It compiles the LangGraph `StateGraph`, attaching system prompts and custom tools to `ChatGoogleGenerativeAI`. It handles the ReAct (Reason + Act) routing, allowing the LLM to recursively call tools like `search_active_documents` until it satisfies the user's prompt.
+* **`app/services/ingestion.py` (Asynchronous Data Pipeline):** Manages the `DocumentProcessor`. File ingestion is a CPU-heavy process. This module uses `asyncio.to_thread()` to isolate operations like `pypdf` extraction, `RecursiveCharacterTextSplitter` chunking, and local HuggingFace embedding generation. This ensures the FastAPI event loop is never blocked, allowing the server to handle concurrent user chats while processing massive PDFs in the background.
+* **`app/tools/metadata_tools.py` (Tool Registry):** Bridges the LLM's natural language output to deterministic code execution. By wrapping SQL queries (like counting active documents) in LangChain `@tool` decorators, we force the AI to fetch exact data from PostgreSQL rather than attempting to guess or hallucinate answers based on vector proximity.
+* **`tests/test_integration.py`:** The CI/CD safeguard. Simulates end-to-end user flows by uploading files, polling the metadata database to verify asynchronous ingestion completion, and validating the structural integrity of the chunked JSON Server-Sent Events stream.
+
+### ⚛️ Frontend UI & State (React / TypeScript / Vite)
+
+* **`src/store/chatStore.ts` (Global State Manager):** A Zustand store acting as the single source of truth. It tracks the active UI view, the chat message array, and a `thoughts` array. It contains the critical `updateLastMessageToken` function, which immutably appends streaming string tokens to the final message object, creating the typewriter effect without complex React state-lag.
+* **`src/hooks/useChatStream.ts` (SSE Consumer):** A highly specialized networking hook. It bypasses standard `fetch` limitations by reading the raw `ReadableStream` from the backend. It uses a `TextDecoder` to parse incoming SSE payloads, determining if the incoming chunk is an agent thought (`eventData.thought`), a text token (`eventData.token`), or a system error, and dispatches the data to the Zustand store.
+* **`src/components/ChatWindow.tsx`:** The primary interactive surface. It maps over the Zustand store, utilizing `react-markdown` with `remark-gfm` to safely render complex AI markdown outputs, tables, and code blocks.
+* **`src/components/DocumentLibrary.tsx`:** The metadata control panel. It fetches the joined state of PostgreSQL and ChromaDB, providing administrators a UI to "soft-delete" (toggle) document availability in the agent's context window instantly.
 
 ---
 
 ## 📂 Repository Structure
 
-The monorepo is strictly divided into frontend and backend workspaces to support independent horizontal scaling and deployment.
-
-### Backend Pipeline (Python / FastAPI)
 ```text
 backend/
 ├── app/
 │   ├── agent/
-│   │   ├── __init__.py
 │   │   └── graph.py             # LangGraph ReAct node & routing logic
 │   ├── services/
-│   │   ├── __init__.py
-│   │   ├── ingestion.py         # Thread-isolated async text extraction & chunking
+│   │   ├── ingestion.py         # Thread-isolated async text extraction
 │   │   └── vector_store.py      # ChromaDB interface
 │   ├── tools/
-│   │   ├── __init__.py
 │   │   └── metadata_tools.py    # SQL/LangChain Tool wrappers
-│   ├── __init__.py
-│   └── database.py              # Connection pooling & schemas (SQLite/Postgres)
+│   └── database.py              # Connection pooling & schemas
 ├── tests/
-│   ├── __init__.py
-│   ├── run_tests.py             # Global test orchestrator & port validation
+│   ├── run_tests.py             # Global test orchestrator
 │   ├── test_ingestion.py        # Chunking & async error unit tests
 │   └── test_integration.py      # SSE and End-to-End API tests
 ├── docs/
-│   ├── architecture.md          # Internal system design docs
-│   └── image.png                # Architecture visual asset
-├── .env                         # Environment variables mapping
 ├── docker-compose.yml           # Multi-container orchestration (DB + API)
 ├── dockerfile                   # Backend image blueprint
 ├── main.py                      # FastAPI ASGI entrypoint
-└── requirements.txt             # Pip dependencies
-```
+└── requirements.txt             
 
-### Frontend Workspace (React / Vite)
-```text
 frontend/
 ├── src/
-│   ├── assets/                  # Static assets
 │   ├── components/
 │   │   ├── ui/                  # shadcn accessible primitives
-│   │   │   ├── button.tsx       
-│   │   │   ├── input.tsx        
-│   │   │   └── scroll-area.tsx  
 │   │   ├── ChatWindow.tsx       # Live SSE markdown renderer
 │   │   ├── DocumentLibrary.tsx  # CRUD UI for metadata & vector tables
 │   │   ├── DocumentSidebar.tsx  # Multipart upload dropzone
@@ -180,41 +176,33 @@ frontend/
 │   │   └── useChatStream.ts     # Custom chunk-buffering SSE Parser
 │   ├── lib/
 │   │   ├── api.ts               # Centralized HTTP client layer
-│   │   └── utils.ts             # Tailwind class merging (clsx)
+│   │   └── utils.ts             
 │   ├── store/
-│   │   └── chatStore.ts         # Zustand global state (Message & Prompt buffering)
+│   │   └── chatStore.ts         # Zustand global state
 │   ├── App.tsx                  # Root layout & view controller
-│   ├── index.css                # Global Tailwind directives
-│   └── main.tsx                 # React DOM attachment
-├── public/                      # Public facing static assets
-├── .gitignore                   # Git exclusions
-├── components.json              # shadcn CLI config
-├── eslint.config.js             # Linter rules
-├── index.html                   # HTML entrypoint
-├── package-lock.json            # Dependency tree lock
-├── package.json                 # Node dependencies
-├── postcss.config.js            # PostCSS config for Tailwind
-├── tailwind.config.js           # Theme configuration
-├── tsconfig.app.json            # TypeScript app config
-├── tsconfig.json                # TypeScript base config
-├── tsconfig.node.json           # TypeScript node config
-└── vite.config.ts               # Vite bundler configuration
+│   └── main.tsx                 
+├── package.json                 
+├── tailwind.config.js           
+└── vite.config.ts               
 ```
 
 ---
 
 ## 🚀 Getting Started
 
-### 1. Environment Configuration
-Create a `.env` file in the `/backend` directory. Map your Gemini API key and Postgres credentials.
+### 1. Prerequisites
+* **Docker & Docker Compose** (Recommended for easiest database setup)
+* **Node.js 18+** & npm
+* **Python 3.11+** (If running backend natively)
+* A Google Gemini API Key
+
+### 2. Environment Configuration
+Create a `.env` file in the `/backend` directory:
 
 ```env
 # AI Engine
-LLM_API_KEY=AIzaSy...
-LLM_MODEL=gemini-flash-lite-latest
-
-# Disable telemetry for privacy
-ANONYMIZED_TELEMETRY=False
+LLM_API_KEY=your_gemini_api_key_here
+LLM_MODEL=gemini-3.1-flash-lite
 
 # Database config
 USE_POSTGRES=true
@@ -228,53 +216,82 @@ DB_PASSWORD=super_secure_password
 API_PORT=8000
 ```
 
-### 2. Deployment (Docker / Production)
-The fastest way to spin up the entire architecture (PostgreSQL, Vector Volumes, and FastAPI Gateway) is via Docker Compose. Ensure port `8000` and `5432` are available.
-
+### 3. Local Development Setup
+**Start the Backend (Docker):**
 ```bash
 cd backend
 docker compose up --build -d
 ```
-*Note: Run `docker compose down -v` if you need to wipe the persistent database volumes to regenerate the schema.*
+*This spins up the PostgreSQL container and the FastAPI server. The database schema will initialize automatically.*
 
-### 3. Local Development (Frontend)
-Run the React Vite server locally. It is pre-configured to proxy requests to `http://localhost:8000`.
-
+**Start the Frontend:**
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+*The Vite server will start on `http://localhost:5173` and automatically proxy API calls to port `8000`.*
+
+---
+
+## ☁️ DigitalOcean Deployment Guide
+
+This platform is architected to run seamlessly on a DigitalOcean Droplet. Using your $200 GitHub Student Developer Pack credit, you can host this live for months at zero cost.
+
+**Step 1: Provision the Droplet**
+1. Log into DigitalOcean and create a new Droplet.
+2. Choose **Ubuntu 24.04 (LTS)**.
+3. Select a Basic Plan (A $6-$12/mo plan with 1-2GB RAM is sufficient since embeddings are processed asynchronously and we are not hosting the LLM itself).
+4. Add your SSH keys for secure access.
+
+**Step 2: Server Setup**
+SSH into your droplet and install Docker:
+```bash
+ssh root@your_droplet_ip
+apt update && apt upgrade -y
+apt install docker.io docker-compose -y
+```
+
+**Step 3: Clone and Configure**
+```bash
+git clone [https://github.com/yourusername/agentic-document-intelligence.git](https://github.com/yourusername/agentic-document-intelligence.git)
+cd agentic-document-intelligence
+```
+* Create your `.env` file in the `backend` directory exactly as shown in the Local Setup step.
+* *Crucial Step:* In `frontend/.env.production`, ensure you set `VITE_API_URL=http://<YOUR_DROPLET_IP>:8000` so the compiled React app knows where to send requests.
+
+**Step 4: Build and Deploy**
+Compile the frontend and spin up the backend containers:
+```bash
+# Build frontend static files (optional, can also be served via Nginx)
+cd frontend && npm install && npm run build
+
+# Start the Backend Services
+cd ../backend
+docker-compose up --build -d
+```
+
+*(For production security, it is highly recommended to place an NGINX reverse proxy in front of the FastAPI app and secure it with a free Certbot/Let's Encrypt SSL certificate).*
 
 ---
 
 ## 🧪 Testing Suite & Reliability
 
-The backend implements a comprehensive `pytest` suite simulating production edge cases.
+To ensure robust CI/CD, the backend implements a specialized `pytest` suite.
 
-* **Unit Tests (`test_ingestion.py`):** Validates the `RecursiveCharacterTextSplitter` boundaries ensuring no chunk exceeds the maximum token limit. Mocks the ChromaDB `add_texts` method to simulate thread-isolated write failures.
-* **Integration Tests (`test_integration.py`):** An end-to-end suite that uploads a physical markdown file, polls the metadata tool to verify async ingestion completion, and tests both standard HTTP parsing and fragmented JSON stream (SSE) outputs from the LLM.
+* **Unit Tests (`test_ingestion.py`):** Ensures text splitters do not breach token boundaries and verifies async exception handling if ChromaDB threading fails.
+* **Integration Tests (`test_integration.py`):** An end-to-end loop that uploads a physical markdown file, polls the metadata tool to verify ingestion, and validates the HTTP fragmented JSON stream (SSE) outputs.
 
-**Run the tests locally:**
+**Run locally:**
 ```bash
 cd backend
 python tests/run_tests.py
 ```
-*(The script includes an automatic pre-flight check to ensure Uvicorn is active on port 8000 before initiating the test runner).*
-
-<!-- 📸 SCREENSHOT PLACEHOLDER: TESTING SUITE -->
-<div align="center">
-  <img src="https://via.placeholder.com/800x300?text=Test+Runner+Output+-+Replace+with+Terminal+Screenshot" alt="Test Runner Output">
-  <br>
-  <em>Figure 4: The automated test suite verifying ingestion chunking, LLM streaming, and SQL database tool invocation.</em>
-</div>
 
 ---
 
 ## 💡 Future Scalability (Roadmap)
-To transition this from a Portfolio Project to a fully Enterprise-ready cluster:
-* Implement **Redis Caching** on the `/api/v1/tools/document_count` endpoint to prevent database thrashing under high concurrency.
-* Implement **Distributed Locks (Pessimistic Locking)** in PostgreSQL when a user toggles the `is_active` state of a document, ensuring safety if multiple admins attempt to modify context simultaneously.
-* Integrate **OpenTelemetry** for distributed tracing across the FastAPI gateway, LangGraph orchestrator, and external API calls to identify bottlenecks in the reasoning loop.
-* Add **Role-Based Access Control (RBAC)** to the API, allowing for multi-tenant deployments with granular permissions on document visibility and agent tool usage.
-* Expand the **Toolset** to include external APIs (e.g., Google Search, Wolfram Alpha) and internal microservices (e.g., User Profile Service) to demonstrate cross-service orchestration capabilities.
+* **Redis Caching:** Implement caching on `/api/v1/tools/document_count` to prevent database thrashing under high UI concurrency.
+* **Pessimistic Locking:** Add transaction locks in PostgreSQL for the `is_active` toggle to prevent race conditions when multiple admins modify context simultaneously.
+* **OAuth2 Authentication:** Integrate standard JWT/OAuth flows to create multi-tenant workspaces with granular permissions on document visibility.
+* **OpenTelemetry:** Add distributed tracing across the FastAPI gateway, LangGraph orchestrator, and Gemini API to identify bottlenecks in the reasoning loop visually.
