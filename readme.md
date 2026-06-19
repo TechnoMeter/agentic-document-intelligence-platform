@@ -263,5 +263,5 @@ python tests/run_tests.py
 * **OpenTelemetry:** Add distributed tracing across the FastAPI gateway, LangGraph orchestrator, and Gemini API to identify bottlenecks in the reasoning loop visually.
 
 ## Copyright
-**Copyright (c) 2026 Shriram Govindarajan. All Rights Reserved.**
+**Copyright (c) 2026 [Shriram Govindarajan](https://shriram.is-a.dev). All Rights Reserved.**
 This repository is available for review purposes only in connection with job applications. No license is granted to use, copy, distribute, or modify this code.
