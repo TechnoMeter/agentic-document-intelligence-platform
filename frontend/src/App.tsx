@@ -19,7 +19,7 @@ function App() {
           <div className="w-8 h-8 rounded-full bg-gradient-to-b from-blue-300 to-blue-600 flex items-center justify-center shadow-[inset_0_1px_2px_rgba(255,255,255,0.8),_0_0_15px_rgba(59,130,246,0.6)] border border-white/40">
             <Database className="w-4 h-4 text-white drop-shadow-md" />
           </div>
-          <h1 className="font-bold text-base tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white/95">Agentic Gateway</h1>
+          <h1 className="font-bold text-base tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white/95">ShriRAGx</h1>
         </div>
         <button 
           onClick={() => setMobileMenuOpen(!isMobileMenuOpen)} 
@@ -49,7 +49,7 @@ function App() {
             <div className="w-8 h-8 rounded-full bg-gradient-to-b from-blue-300 to-blue-600 flex items-center justify-center shadow-[inset_0_1px_2px_rgba(255,255,255,0.8),_0_0_15px_rgba(59,130,246,0.6)] border border-white/40">
               <Database className="w-4 h-4 text-white drop-shadow-md" />
             </div>
-            <h1 className="font-bold text-base tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white/95">Agentic Gateway</h1>
+            <h1 className="font-bold text-base tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white/95">ShriRAGx</h1>
           </div>
         </div>
         

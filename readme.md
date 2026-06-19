@@ -241,6 +241,67 @@ npm run dev
 
 ---
 
+## ☁️ Microsoft Azure Production Deployment
+
+This architecture is optimized to run on a lightweight Azure B-Series Virtual Machine (e.g., `Standard_B2ats_v2` with 1 GiB RAM) using virtual swap memory to support the local HuggingFace embedding models and ChromaDB without triggering Out-of-Memory (OOM) crashes.
+
+### 1. Provision the Infrastructure
+1. Create an **Ubuntu 22.04 LTS** instance in the Azure Portal.
+2. Under **Inbound port rules**, ensure both **SSH (22)** and **HTTP (80)** are allowed.
+3. Securely download your `.pem` SSH key and connect to the server:
+   ```bash
+   ssh -i <your-key.pem> azureuser@<YOUR_AZURE_IP>
+   ```
+
+### 2. Provision Virtual Swap Memory (Critical)
+Because the instance relies on 1 GiB of physical RAM, you must allocate a 2GB virtual swap file on the SSD before deploying the Docker containers.
+```bash
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+# Make the swap file permanent across server reboots
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+### 3. Install Deployment Engines
+```bash
+sudo apt update
+sudo apt install docker.io docker-compose-v2 git -y
+```
+
+### 4. Clone Repository & Configure Environment
+```bash
+git clone [https://github.com/yourusername/your-repo-name.git](https://github.com/yourusername/your-repo-name.git)
+cd your-repo-name/backend
+
+# Create your environment variables file
+nano .env 
+# Add your LLM_API_KEY, DB_PASSWORD, etc.
+```
+
+### 5. Configure Network Routing & Volume Permissions
+To allow the secure internal Docker user (`appuser`) to write the ChromaDB SQLite database to the host machine via the bind mount, and to expose the app to the standard web port (80):
+
+1. **Unlock host directory permissions:**
+   ```bash
+   sudo chmod -R 777 .
+   ```
+2. **Route HTTP traffic:**
+   Open `docker-compose.yml` and update the port mapping under the `app` service to route external traffic on port 80 directly to FastAPI on 8000:
+   ```yaml
+   ports:
+     - "80:8000"
+   ```
+
+### 6. Launch the Platform
+```bash
+sudo docker compose up --build -d
+```
+*The React frontend and Agentic API are now fully integrated and accessible globally via `http://<YOUR_AZURE_IP>`.*
+
+---
+
 ## 🧪 Testing Suite & Reliability
 
 To ensure robust CI/CD, the backend implements a specialized `pytest` suite.
