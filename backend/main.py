@@ -96,9 +96,9 @@ async def stream_agent_response(message: str):
 async def ping():
     return {"status": "ok"}
 
-@app.get("/")
-async def root():
-    return {"status": "Agentic RAG API is running"}
+# @app.get("/")
+# async def root():
+#     return {"status": "Agentic RAG API is running"}
 
 @app.post("/api/v1/chat")
 async def chat_endpoint(request: ChatRequest):
