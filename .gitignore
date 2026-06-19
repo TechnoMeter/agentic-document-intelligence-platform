@@ -118,6 +118,7 @@ postgres_data/
 .env.production.local
 *.env
 !.env.example
+*.pem
 
 # ==========================================
 # Logs and Diagnostics
