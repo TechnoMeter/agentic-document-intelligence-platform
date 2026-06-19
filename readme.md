@@ -24,11 +24,11 @@
 
 ---
 
-![Main UI](docs/image.png)
+![Main UI](docs/image1.png)
 
-![Document Library](docs/image-1.png)
+![Document Library](docs/image2.png)
 
-![Manual](docs/image-2.png)
+![Manual](docs/image3.png)
 
 
 ## 🌐 Live Demo & Hosting
@@ -36,7 +36,7 @@
 This project is actively hosted and available for testing. 
 The infrastructure is containerized and provisioned on a **Microsoft Azure B-Series Virtual Machine**.
 
-👉 **[Access the Live Platform Here](https://shriram.is-a.dev)** *(Note: The demo instance uses lightweight edge-embeddings and virtual swap memory allocations to minimize the physical RAM footprint on the cloud server. Uploaded files are cleared on a rolling 24-hour basis).*
+👉 **[Access the Live Platform Here](https://shriram-agentic-rag.austriaeast.cloudapp.azure.com/)** *(Note: The demo instance uses lightweight edge-embeddings and virtual swap memory allocations to minimize the physical RAM footprint on the cloud server. Uploaded files are cleared on a rolling 24-hour basis).*
 
 ---
 
@@ -150,7 +150,7 @@ The repository is built for horizontal scalability. Here is a technical breakdow
 
 ## 📂 Repository Structure
 
-```text
+```t
 backend/
 ├── app/
 │   ├── agent/
@@ -165,9 +165,10 @@ backend/
 │   ├── run_tests.py             # Global test orchestrator
 │   ├── test_ingestion.py        # Chunking & async error unit tests
 │   └── test_integration.py      # SSE and End-to-End API tests
-├── docs/
+├── dist/                        # Compiled production package (after `pip install .`)
 ├── docker-compose.yml           # Multi-container orchestration (DB + API)
 ├── dockerfile                   # Backend image blueprint
+├── Caddyfile                    # Let's Encrypt SSL Reverse Proxy
 ├── main.py                      # FastAPI ASGI entrypoint
 └── requirements.txt             
 
@@ -272,33 +273,68 @@ sudo apt install docker.io docker-compose-v2 git -y
 
 ### 4. Clone Repository & Configure Environment
 ```bash
-git clone [https://github.com/yourusername/your-repo-name.git](https://github.com/yourusername/your-repo-name.git)
-cd your-repo-name/backend
+git clone [https://github.com/TechnoMeter/agentic-document-intelligence-platform.git](https://github.com/TechnoMeter/agentic-document-intelligence-platform.git)
+cd agentic-document-intelligence-platform/backend
 
 # Create your environment variables file
 nano .env 
 # Add your LLM_API_KEY, DB_PASSWORD, etc.
 ```
 
-### 5. Configure Network Routing & Volume Permissions
-To allow the secure internal Docker user (`appuser`) to write the ChromaDB SQLite database to the host machine via the bind mount, and to expose the app to the standard web port (80):
+### 5. Configure Azure DNS Label (Free Domain)
+To provision a free SSL certificate via Let's Encrypt, you cannot use a raw IP address. 
+1. In the Azure Portal, navigate to your Virtual Machine.
+2. Click on the **Public IP address** located in the *Essentials* section.
+3. Navigate to **Configuration** (under Settings).
+4. Enter your preferred domain prefix in the **DNS name label** text box.
+5. Click **Save**. Your domain is now formally registered (e.g., `[https://shriram-agentic-rag.austriaeast.cloudapp.azure.com/](https://shriram-agentic-rag.austriaeast.cloudapp.azure.com/)`).
+
+### 6. Configure Reverse Proxy & SSL (Caddy)
+To secure the application with HTTPS and allow the secure internal Docker user (`appuser`) to write the ChromaDB SQLite database to the host machine:
 
 1. **Unlock host directory permissions:**
    ```bash
    sudo chmod -R 777 .
    ```
-2. **Route HTTP traffic:**
-   Open `docker-compose.yml` and update the port mapping under the `app` service to route external traffic on port 80 directly to FastAPI on 8000:
+2. **Create the Caddyfile:**
+   ```bash
+   nano Caddyfile
+   ```
+   Paste the following, ensuring you replace the domain with your actual Azure or custom URL:
+   ```text
+   shriram-agentic-rag.austriaeast.cloudapp.azure.com {
+       reverse_proxy app:8000
+   }
+   ```
+3. **Route HTTPS traffic:**
+   Open `docker-compose.yml`. Remove the exposed ports from the `app` service and define the Caddy service at the bottom:
    ```yaml
-   ports:
-     - "80:8000"
+   services:
+     # ...
+     caddy:
+       image: caddy:2-alpine
+       restart: unless-stopped
+       ports:
+         - "80:80"
+         - "443:443"
+       volumes:
+         - ./Caddyfile:/etc/caddy/Caddyfile
+         - caddy_data:/data
+         - caddy_config:/config
+       depends_on:
+         - app
+
+   volumes:
+     postgres_data:
+     caddy_data:
+     caddy_config:
    ```
 
-### 6. Launch the Platform
+### 7. Launch the Secured Platform
 ```bash
 sudo docker compose up --build -d
 ```
-*The React frontend and Agentic API are now fully integrated and accessible globally via `http://<YOUR_AZURE_IP>`.*
+*The React frontend and Agentic API are now fully encrypted and accessible globally via `https://<YOUR_AZURE_DOMAIN>`.*
 
 ---
 
