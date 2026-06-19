@@ -16,7 +16,7 @@
   
   <br><br>
   
-<h1>🧠 Agentic Document Intelligence Platform</h1>
+<h1>Agentic Document Intelligence Platform</h1>
   <p><strong>A production-grade, asynchronous RAG architecture powered by LangGraph, Local Edge Embeddings, and Native Tool Orchestration.</strong></p>
 </div>
 
