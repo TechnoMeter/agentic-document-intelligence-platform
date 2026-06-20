@@ -97,9 +97,8 @@ export function Login() {
             <p className="text-sm font-medium">Upload your files. Ask anything. Get clear answers – instantly.</p>
             <p className="text-xs text-blue-100/50 mt-1">Just your documents and our AI. It's that easy.</p>
           </div>
-        </div> {/* FIXED: Properly closed the header layout container here */}
+        </div> 
 
-        {/* ===== RECENT PROFILES – CENTERED, LARGER, GREEN GLOW ===== */}
         {profiles.length > 0 && (
           <div className="mt-8"> {/* Added slightly more top margin since it's no longer inside the flex-col */}
             <p className="text-xs font-medium text-blue-200/60 uppercase tracking-wider text-center mb-3">
