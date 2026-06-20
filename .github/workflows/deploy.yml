@@ -27,6 +27,9 @@ jobs:
             git reset --hard HEAD
             git pull origin main
             
+            # Navigate to the backend directory containing docker-compose.yml
+            cd backend
+            
             # 2. Shut down existing containers to free RAM for the build process
             sudo docker compose down
             
