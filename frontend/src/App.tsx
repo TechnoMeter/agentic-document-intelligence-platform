@@ -52,19 +52,34 @@ function App() {
   return (
     <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden font-sans text-slate-100 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#003B5C] via-[#051B2C] to-[#000000]">
       
-      <header className="md:hidden flex items-center justify-between p-4 bg-black/20 backdrop-blur-md border-b border-white/10 z-30 relative shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-b from-blue-300 to-blue-600 flex items-center justify-center shadow-[inset_0_1px_2px_rgba(255,255,255,0.8),_0_0_15px_rgba(59,130,246,0.6)] border border-white/40">
+      {/* ===== MOBILE HEADER (now includes username + logout) ===== */}
+      <header className="md:hidden flex items-center justify-between p-3 bg-black/20 backdrop-blur-md border-b border-white/10 z-30 relative shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-b from-blue-300 to-blue-600 flex items-center justify-center shadow-[inset_0_1px_2px_rgba(255,255,255,0.8),_0_0_15px_rgba(59,130,246,0.6)] border border-white/40 shrink-0">
             <Database className="w-4 h-4 text-white drop-shadow-md" />
           </div>
-          <h1 className="font-bold text-base tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white/95">ShriRAGx</h1>
+          <div className="truncate">
+            <h1 className="font-bold text-sm tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white/95">ShriRAGx</h1>
+            <p className="text-xs text-blue-200/60 truncate drop-shadow-[0_0_8px_rgba(34,197,94,0.5)]">
+              {username}
+            </p>
+          </div>
         </div>
-        <button 
-          onClick={() => setMobileMenuOpen(!isMobileMenuOpen)} 
-          className="text-white p-2 hover:bg-white/10 rounded-md transition-colors"
-        >
-          {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={logout}
+            className="flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg shadow-[inset_0_1px_2px_rgba(255,255,255,0.3),_0_0_15px_rgba(239,68,68,0.4)] transition-all"
+          >
+            <LogOut className="w-4 h-4" />
+            Logout
+          </button>
+          <button 
+            onClick={() => setMobileMenuOpen(!isMobileMenuOpen)} 
+            className="text-white p-2 hover:bg-white/10 rounded-md transition-colors"
+          >
+            {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </div>
       </header>
 
       {isMobileMenuOpen && (
@@ -74,13 +89,14 @@ function App() {
         />
       )}
       
+      {/* ===== SIDEBAR (desktop) ===== */}
       <aside className={cn(
         "fixed inset-y-0 left-0 z-50 w-[280px] bg-[#051B2C]/95 md:bg-white/5 backdrop-blur-2xl border-r border-white/10 shadow-[inset_-1px_0_0_rgba(255,255,255,0.05),_5px_0_30px_rgba(0,0,0,0.5)] flex-col transition-transform duration-300 ease-in-out md:relative md:translate-x-0 md:flex",
         isMobileMenuOpen ? "translate-x-0 flex" : "-translate-x-full hidden"
       )}>
         <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent opacity-50 pointer-events-none" />
         
-        {/* ---------- Desktop Header (now shows username) ---------- */}
+        {/* Desktop Header with username (green glow) and logout button */}
         <div className="hidden md:flex items-center justify-between p-4 border-b border-white/10 relative z-10">
           <div className="flex items-center gap-3 text-white min-w-0">
             <div className="w-8 h-8 rounded-full bg-gradient-to-b from-blue-300 to-blue-600 flex items-center justify-center shadow-[inset_0_1px_2px_rgba(255,255,255,0.8),_0_0_15px_rgba(59,130,246,0.6)] border border-white/40 shrink-0">
@@ -88,15 +104,17 @@ function App() {
             </div>
             <div className="truncate">
               <h1 className="font-bold text-base tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white/95">ShriRAGx</h1>
-              <p className="text-xs text-blue-200/60 truncate">{username}</p>
+              <p className="text-xs text-blue-200/60 truncate drop-shadow-[0_0_10px_rgba(34,197,94,0.7)]">
+                {username}
+              </p>
             </div>
           </div>
           <button 
             onClick={logout}
-            className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors shrink-0 ml-2"
-            title="Logout"
+            className="flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg shadow-[inset_0_1px_2px_rgba(255,255,255,0.3),_0_0_15px_rgba(239,68,68,0.4)] transition-all shrink-0 ml-2"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-4 h-4" />
+            Logout
           </button>
         </div>
         
