@@ -1,3 +1,5 @@
+# This module defines the vector store for the document intelligence platform, using Chroma as the vector database and HuggingFace's MiniLM model for generating embeddings from document chunks.
+
 import os
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings

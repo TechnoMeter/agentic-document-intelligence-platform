@@ -40,9 +40,21 @@ if USE_POSTGRES:
                         file_type TEXT NOT NULL,
                         upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         chunk_count INTEGER,
-                        is_active BOOLEAN DEFAULT TRUE
+                        is_active BOOLEAN DEFAULT TRUE,
+                        owner_id TEXT NOT NULL DEFAULT 'default_session'
                     )
                 """)
+                # Check if owner_id column exists, if not add it
+                cur.execute("""
+                    SELECT column_name FROM information_schema.columns 
+                    WHERE table_name='documents' AND column_name='owner_id'
+                """)
+                if not cur.fetchone():
+                    cur.execute("""
+                        ALTER TABLE documents ADD COLUMN owner_id TEXT NOT NULL DEFAULT 'default_session'
+                    """)
+                # Create index for performance
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_owner_id ON documents(owner_id)")
             conn.commit()
 
 else:
@@ -67,9 +79,16 @@ else:
                     file_type TEXT NOT NULL,
                     upload_date DATETIME DEFAULT CURRENT_TIMESTAMP,
                     chunk_count INTEGER,
-                    is_active BOOLEAN DEFAULT 1
+                    is_active BOOLEAN DEFAULT 1,
+                    owner_id TEXT NOT NULL DEFAULT 'default_session'
                 )
             """)
+            # Try to add owner_id column if it doesn't exist
+            try:
+                conn.execute("ALTER TABLE documents ADD COLUMN owner_id TEXT NOT NULL DEFAULT 'default_session'")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_owner_id ON documents(owner_id)")
             conn.commit()
 
 # Initialize on import

@@ -7,9 +7,10 @@ export function useChatStream() {
   const addThought = useChatStore((state) => state.addThought);
   const clearThoughts = useChatStore((state) => state.clearThoughts);
   const setLoading = useChatStore((state) => state.setLoading);
+  const sessionId = useChatStore((state) => state.sessionId);
 
   const sendMessage = async (message: string) => {
-    if (!message.trim()) return;
+    if (!message.trim() || !sessionId) return;
 
     setLoading(true);
     clearThoughts();
@@ -18,7 +19,7 @@ export function useChatStream() {
     addMessage({ role: 'assistant', content: '', isStreaming: true });
 
     try {
-      const response = await api.chatStream(message);
+      const response = await api.chatStream(message, sessionId);
 
       if (!response.body) throw new Error('Unreadable response body payload.');
 
@@ -33,7 +34,7 @@ export function useChatStream() {
 
         chunkBuffer += decoder.decode(value, { stream: true });
         const lines = chunkBuffer.split('\n\n');
-        chunkBuffer = lines.pop() || ''; 
+        chunkBuffer = lines.pop() || '';
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
@@ -60,7 +61,6 @@ export function useChatStream() {
         }
       }
 
-      // If the stream ended without a 'done' event, signal an interruption
       if (!receivedDone) {
         updateLastMessageToken('\n[Connection interrupted – incomplete response]', false);
       }

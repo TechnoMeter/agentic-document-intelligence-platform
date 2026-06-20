@@ -1,6 +1,6 @@
 <div align="center">
   <!-- Status & License Badges -->
-  <img src="https://img.shields.io/badge/Status-Active-success.svg?style=for-the-badge" alt="Status">
+  <img src="https://img.shields.io/badge/Status-Production_Ready-success.svg?style=for-the-badge" alt="Status">
   <img src="https://img.shields.io/badge/Deployed-Microsoft_Azure-0089D6?style=for-the-badge&logo=microsoft-azure&logoColor=white" alt="Microsoft Azure">
   
   <br><br>
@@ -12,12 +12,13 @@
   <img src="https://img.shields.io/badge/FastAPI-0.100+-009688.svg?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI">
   <img src="https://img.shields.io/badge/LangGraph-Agentic-9b59b6.svg?style=flat-square" alt="LangGraph">
   <img src="https://img.shields.io/badge/PostgreSQL-15-4169E1.svg?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL">
+  <img src="https://img.shields.io/badge/ChromaDB-Vector-FF6B6B.svg?style=flat-square" alt="ChromaDB">
   <img src="https://img.shields.io/badge/Docker-Supported-2496ED.svg?style=flat-square&logo=docker&logoColor=white" alt="Docker">
   
   <br><br>
   
 <h1>Agentic Document Intelligence Platform</h1>
-  <p><strong>A production-grade, asynchronous RAG architecture powered by LangGraph, Local Edge Embeddings, and Native Tool Orchestration.</strong></p>
+  <p><strong>A secure, multi‑tenant, production‑grade RAG architecture with autonomous agentic orchestration.</strong></p>
 </div>
 
 <br />
@@ -36,7 +37,7 @@
 This project is actively hosted and available for testing. 
 The infrastructure is containerized and provisioned on a **Microsoft Azure B-Series Virtual Machine**.
 
-👉 **[Access the Live Platform Here](https://shriram-agentic-rag.austriaeast.cloudapp.azure.com/)** *(Note: The demo instance uses lightweight edge-embeddings and virtual swap memory allocations to minimize the physical RAM footprint on the cloud server. Uploaded files are cleared on a rolling 24-hour basis).*
+👉 **[Access the Live Platform Here](https://shriram-agentic-rag.austriaeast.cloudapp.azure.com/)** *(Note: The demo instance uses lightweight edge-embeddings and virtual swap memory allocations to minimize the physical RAM footprint on the cloud server. Uploaded files are cleared on a rolling 24‑hour basis).*
 
 ---
 
@@ -58,16 +59,19 @@ The ingestion pipeline natively parses and vectorizes a wide array of document t
 * **Microsoft Office:** `.docx` (Word), `.xlsx` (Excel), `.pptx` (PowerPoint)
 * **Structured Data:** `.json`, `.html`, `.xml` (Safely parsed via BeautifulSoup to prevent vector pollution)
 
+### Multi‑Tenant Security by Design
+The system was rebuilt to serve **multiple isolated users** without the overhead of a full OAuth provider. Instead, the React frontend uses the **Web Crypto API** to compute a SHA‑256 hash of the username + password. This hex string becomes the `session_id` (and `owner_id`). The backend never sees the raw credentials. All data (PostgreSQL rows and ChromaDB vectors) are tagged with this `owner_id`, and every query, tool call, and vector retrieval applies a strict filter. The result: **zero‑effort tenant isolation** with no external identity provider.
 
 ### Engineering Motivations
 1. **Cost & Latency Elimination:** We generate text embeddings *locally* via the `sentence-transformers` library and HuggingFace models. We bypass embedding APIs, avoiding network bottlenecks during large file ingestion.
 2. **Low-Latency UX:** Large AI reasoning loops take time. By utilizing a custom **Server-Sent Events (SSE)** pipeline, the AI's internal "thoughts" (tool selections) and generation tokens are streamed directly to the React UI in real-time. No loading spinners; rapid feedback.
+3. **Resource‑Aware Deployment:** The platform runs on memory‑constrained Azure VMs. To prevent OOM crashes, a **hourly garbage collector** purges all documents older than 24 hours—both from PostgreSQL and ChromaDB—reclaiming disk and memory.
 
 ---
 
 ## 🏗️ System Architecture
 
-The application enforces a strict separation of concerns between the **Write Path** (heavy, asynchronous background file ingestion) and the **Read Path** (autonomous LLM reasoning, retrieval, and execution).
+The application enforces a strict separation of concerns between the **Write Path** (heavy, asynchronous background file ingestion) and the **Read Path** (autonomous LLM reasoning, retrieval, and execution). The new multi‑tenant and memory layers are highlighted.
 
 ```mermaid
 graph TD
@@ -77,37 +81,68 @@ graph TD
     classDef db fill:#f2a900,stroke:#333,stroke-width:2px,color:#000;
     classDef external fill:#ff9900,stroke:#333,stroke-width:2px,color:#000;
     classDef agent fill:#9b59b6,stroke:#333,stroke-width:2px,color:#fff;
+    classDef security fill:#e74c3c,stroke:#333,stroke-width:2px,color:#fff;
 
-    %% Nodes
-    Client["React Frontend<br/>(Zustand + SSE Hook)"]:::frontend
-    API["FastAPI Gateway<br/>(Async HTTP + SSE Stream)"]:::backend
-    Worker["Ingestion Pipeline<br/>(Threaded Text Chunking)"]:::backend
-    LangGraph["LangGraph State Machine<br/>(ReAct Orchestrator)"]:::agent
-    ToolNode["System Tool Node<br/>(SQL Provider)"]:::backend
-    
-    VectorDB[("ChromaDB<br/>(Semantic Vectors)")]:::db
-    SQL[("PostgreSQL<br/>(ACID Metadata)")]:::db
-    LLM["Google Gemini API<br/>(Reasoning Engine)"]:::external
+    %% Logical Architectural Tiers
+    subgraph "1. Client Tier"
+        Client["React Frontend<br/>(Zustand + SSE Hook)"]:::frontend
+        Hasher["Web Crypto SHA-256<br/>(Client-Side Hashing)"]:::security
+    end
+
+    subgraph "2. API Gateway Tier"
+        API["FastAPI Gateway<br/>(Async HTTP + SSE Stream)"]:::backend
+    end
+
+    subgraph "3. Orchestration & Processing Tier"
+        LangGraph["LangGraph State Machine<br/>(ReAct Orchestrator)"]:::agent
+        Memory["MemorySaver<br/>(Conversation Checkpoint)"]:::agent
+        Worker["Ingestion Pipeline<br/>(Threaded Text Chunking)"]:::backend
+        ToolNode["System Tool Node<br/>(SQL Provider)"]:::backend
+        Scheduler["APScheduler<br/>(Hourly Garbage Collection)"]:::backend
+    end
+
+    subgraph "4. Data Storage Tier"
+        VectorDB[("ChromaDB<br/>(Semantic Vectors)")]:::db
+        SQL[("PostgreSQL<br/>(ACID Metadata)")]:::db
+    end
+
+    subgraph "5. External Services"
+        LLM["Google Gemini API<br/>(Reasoning Engine)"]:::external
+    end
+
+    %% Edges - Authentication
+    Client -- "1. Hash Credentials" --> Hasher
+    Hasher -- "2. Return session_id" --> Client
 
     %% Edges - Ingestion Flow
-    Client -- "1. Upload File" --> API
-    API -- "2. Background Task Trigger" --> Worker
-    Worker -- "3. Save ACID Metadata" ---> SQL
-    Worker -- "4. Store Chunk Embeddings" ---> VectorDB
+    Client -- "3. Upload File" --> API
+    API -- "4. Background Task" --> Worker
+    Worker -- "5. Save Metadata" --> SQL
+    Worker -- "6. Store Embeddings" --> VectorDB
 
     %% Edges - Query Flow
     Client -- "A. Ask Question" --> API
-    API -- "B. Invoke State Machine" --> LangGraph
-    LangGraph <-->|C. Reasoning Loop| LLM
+    API -- "B. Invoke Graph" --> LangGraph
+    
+    %% Split Bidirectional Arrows for Cleaner Routing
+    LangGraph -- "C. Send Prompt" --> LLM
+    LLM -- "C. Yield Tokens" --> LangGraph
+    
+    LangGraph -- "D. Write Checkpoint" --> Memory
+    Memory -- "D. Read Checkpoint" --> LangGraph
     
     %% Agent Tool Calls
-    LangGraph <-->|D. RAG Similarity Search| VectorDB
-    LangGraph <-->|E. Protocol Query| ToolNode
-    ToolNode <-->|F. Secure DB Read/Write| SQL
+    LangGraph -- "E. Similarity Search" --> VectorDB
+    LangGraph -- "F. Protocol Query" --> ToolNode
+    ToolNode -- "G. DB Read/Write" --> SQL
     
+    %% Garbage Collection
+    Scheduler -. "H. Hourly Cleanup" .-> SQL
+    Scheduler -. "I. Delete Expired" .-> VectorDB
+
     %% Streaming Response
-    LangGraph -. "G. Yield Event Stream" .-> API
-    API -. "H. Server-Sent Events (SSE)" .-> Client
+    LangGraph -. "J. Yield Event Stream" .-> API
+    API -. "K. SSE Stream" .-> Client
 ```
 
 ---
@@ -117,13 +152,25 @@ graph TD
 ### 1. True Agentic Orchestration (ReAct)
 Unlike traditional endpoints that force queries linearly into a Vector DB, the LangGraph orchestrator dynamically invokes tools. Using native `langchain-google-genai` integration, the Agent securely passes `thought_signatures` and natively decides whether to run a semantic search, run an SQL query, or respond conversationally.
 
-### 2. Dual-Layer Storage (ChromaDB + PostgreSQL)
-Documents are not just vectorized; their lifecycle is actively managed.
-* **ChromaDB:** Stores the dense vector representations of `RecursiveCharacterTextSplitter` chunks for cosine-similarity semantic searches.
-* **PostgreSQL:** Tracks file state, upload timestamps, and a boolean `is_active` toggle. This allows users to "soft delete" documents from the AI's context window dynamically via the UI without destroying the underlying embeddings.
+### 2. Dual‑Layer Storage with Tenant Isolation
+* **ChromaDB:** Stores dense vector representations of `RecursiveCharacterTextSplitter` chunks, each tagged with the `owner_id`. All retrievals use a compound `$and` filter to enforce tenant boundaries.
+* **PostgreSQL:** Tracks file state, upload timestamps, `is_active` toggle, and – critically – the `owner_id` column. Every SQL query includes `WHERE owner_id = %s` to guarantee isolation.
 
-### 3. Decoupled Tool Endpoints & Reliability
-A common failure pattern in AI engineering is coupling REST APIs to generic wrapper libraries, causing parameter ingestion crashes (like missing model-specific tokens). Our system isolates external APIs, utilizing native SDKs specifically tailored to Gemini 3.x payload requirements, preventing 400 Bad Request errors during tool loops.
+### 3. Agentic Memory (LangGraph Checkpointing)
+The platform now uses `MemorySaver` as the checkpointer during graph compilation. By passing the user's `session_id` as the `thread_id` in `RunnableConfig`, the agent retains conversational context across multiple turns. Users can refer back to earlier statements (e.g., *"My secret code is 4455"*) without re‑uploading documents.
+
+### 4. Automated Garbage Collection (Resource Protection)
+Running local HuggingFace embeddings and ChromaDB on a 1 GiB RAM Azure VM is challenging. Without cleanup, old vectors and metadata accumulate, leading to OOM kills. A **background APScheduler** runs every hour and:
+
+- Queries PostgreSQL for documents older than 24 hours.
+- For each expired document, deletes its vectors from ChromaDB using the compound `{source, owner_id}` filter.
+- Deletes the corresponding PostgreSQL rows.
+- Logs the operation.
+
+This guarantees the system remains responsive even with continuous uploads.
+
+### 5. Client‑Side Hashing (Zero‑Trust Authentication)
+The frontend never sends plaintext passwords. Instead, it concatenates the username and password, applies the SHA‑256 algorithm via `crypto.subtle.digest()`, and stores the resulting 64‑character hex string as the `sessionId` in the Zustand store. This hash is used as the `owner_id` in all API calls. The backend remains completely stateless with respect to user credentials – it only sees the hash.
 
 ---
 
@@ -133,65 +180,73 @@ The repository is built for horizontal scalability. Here is a technical breakdow
 
 ### 🐍 Backend Data & Orchestration (Python / FastAPI)
 
-* **`main.py` (API Gateway & Streaming Control):** The ASGI entrypoint. It exposes standard RESTful endpoints for CRUD operations. Its most complex function is `stream_agent_response`, an async generator that subscribes to LangGraph's `astream_events`. It captures `on_chat_model_stream` (for text tokens) and `on_tool_start`/`on_tool_end` (for agent reasoning), formatting them into strict JSON `data: ... \n\n` SSE blocks for the frontend.
-* **`app/agent/graph.py` (Agent Logic):** The "brain". It compiles the LangGraph `StateGraph`, attaching system prompts and custom tools to `ChatGoogleGenerativeAI`. It handles the ReAct (Reason + Act) routing, allowing the LLM to recursively call tools like `search_active_documents` until it satisfies the user's prompt.
-* **`app/services/ingestion.py` (Asynchronous Data Pipeline):** Manages the `DocumentProcessor`. File ingestion is a CPU-heavy process. This module features a dynamic text-extraction router that parses 13 different file formats natively (utilizing `docx`, `openpyxl`, `beautifulsoup4`, `ebooklib`, etc.). It uses `asyncio.to_thread()` to isolate these extractions, `RecursiveCharacterTextSplitter` chunking, and local HuggingFace embedding generation. This ensures the FastAPI event loop is never blocked, allowing the server to handle concurrent user chats while processing massive documents in the background.
-* **`app/tools/metadata_tools.py` (Tool Registry):** Bridges the LLM's natural language output to deterministic code execution. By wrapping SQL queries (like counting active documents) in LangChain `@tool` decorators, we force the AI to fetch exact data from PostgreSQL rather than attempting to guess or hallucinate answers based on vector proximity.
-* **`tests/test_integration.py`:** The CI/CD safeguard. Simulates end-to-end user flows by uploading files, polling the metadata database to verify asynchronous ingestion completion, and validating the structural integrity of the chunked JSON Server-Sent Events stream.
+* **`main.py` (API Gateway & Streaming Control):** The ASGI entrypoint. It exposes RESTful endpoints that now require `session_id` as a query param or form field. The `lifespan` context manager starts the APScheduler for hourly cleanup. The SSE generator streams tokens and agent thoughts to the frontend.
+* **`app/agent/graph.py` (Agent Logic):** The "brain". It compiles the LangGraph `StateGraph` with `MemorySaver` checkpointing. All tools (including `search_active_documents`) now accept a `RunnableConfig` parameter to extract the `thread_id` and enforce tenant isolation.
+* **`app/services/ingestion.py` (Asynchronous Data Pipeline):** Manages the `DocumentProcessor`. It now accepts an `owner_id` parameter, which is added to every chunk's metadata before storage in ChromaDB.
+* **`app/tools/metadata_tools.py` (Tool Registry):** All tools (e.g., `get_document_count`) now read the `thread_id` from the `config` object and append `AND owner_id = %s` to every SQL query.
+* **`app/database.py`:** The schema now includes an `owner_id` column with a default of `'default_session'`. An `ALTER TABLE` failsafe ensures existing databases are upgraded automatically.
+* **`tests/`:** The test suite has been expanded to cover multi‑tenant isolation, agent memory, and garbage collection logic.
 
 ### ⚛️ Frontend UI & State (React / TypeScript / Vite)
 
-* **`src/store/chatStore.ts` (Global State Manager):** A Zustand store acting as the single source of truth. It tracks the active UI view, the chat message array, and a `thoughts` array. It contains the critical `updateLastMessageToken` function, which immutably appends streaming string tokens to the final message object, creating the typewriter effect without complex React state-lag.
-* **`src/hooks/useChatStream.ts` (SSE Consumer):** A highly specialized networking hook. It bypasses standard `fetch` limitations by reading the raw `ReadableStream` from the backend. It uses a `TextDecoder` to parse incoming SSE payloads, determining if the incoming chunk is an agent thought (`eventData.thought`), a text token (`eventData.token`), or a system error, and dispatches the data to the Zustand store.
-* **`src/components/ChatWindow.tsx`:** The primary interactive surface. It maps over the Zustand store, utilizing `react-markdown` with `remark-gfm` to safely render complex AI markdown outputs, tables, and code blocks.
-* **`src/components/DocumentLibrary.tsx`:** The metadata control panel. It fetches the joined state of PostgreSQL and ChromaDB, providing administrators a UI to "soft-delete" (toggle) document availability in the agent's context window instantly.
+* **`src/store/chatStore.ts`:** Now stores the `sessionId` (null until login). All components pull this value to pass to API calls.
+* **`src/lib/api.ts`:** Every function (`uploadFile`, `chatStream`, `getDocuments`, `toggleDocument`, `deleteDocument`, `getDocumentChunks`) now requires a `sessionId` parameter and includes it as a query param, form field, or JSON body.
+* **`src/components/Login.tsx`:** The entry point. Uses the Web Crypto API to hash credentials and sets the `sessionId` in the store. Includes a 24‑hour data wipe warning.
+* **`src/App.tsx`:** Conditionally renders the `Login` component if `sessionId` is null, otherwise shows the main application.
 
 ---
 
 ## 📂 Repository Structure
 
-```t
+```text
 backend/
 ├── app/
 │   ├── agent/
-│   │   └── graph.py             # LangGraph ReAct node & routing logic
+│   │   └── graph.py             # LangGraph ReAct node + MemorySaver
 │   ├── services/
-│   │   ├── ingestion.py         # Thread-isolated async text extraction
+│   │   ├── ingestion.py         # Thread‑isolated async extraction (owner_id)
 │   │   └── vector_store.py      # ChromaDB interface
 │   ├── tools/
-│   │   └── metadata_tools.py    # SQL/LangChain Tool wrappers
-│   └── database.py              # Connection pooling & schemas
+│   │   └── metadata_tools.py    # SQL/LangChain Tool wrappers (tenant‑aware)
+│   └── database.py              # Connection pooling & schema (owner_id)
 ├── tests/
-│   ├── run_tests.py             # Global test orchestrator
-│   ├── test_ingestion.py        # Chunking & async error unit tests
-│   └── test_integration.py      # SSE and End-to-End API tests
-├── dist/                        # Compiled production package (after `pip install .`)
-├── docker-compose.yml           # Multi-container orchestration (DB + API)
+│   ├── run_tests.py             # Test runner script
+│   ├── test_ingestion.py        # Chunking + owner_id + GC tests
+│   └── test_integration.py      # Multi‑tenant & memory end‑to‑end tests
+├── dist/                        # Compiled production package
+├── docker-compose.yml           # Multi‑container orchestration
 ├── dockerfile                   # Backend image blueprint
 ├── Caddyfile                    # Let's Encrypt SSL Reverse Proxy
-├── main.py                      # FastAPI ASGI entrypoint
-└── requirements.txt             
+├── main.py                      # FastAPI ASGI entrypoint (with lifespan)
+└── requirements.txt             # includes apscheduler
 
 frontend/
 ├── src/
+│   ├── __tests__/               # Frontend test suite
+│   │   ├── setup.ts             # Test environment setup (crypto mocks, etc.)
+│   │   ├── api.test.ts          # API client tests (session_id handling)
+│   │   ├── App.test.tsx         # App routing tests (Login vs Main)
+│   │   └── Login.test.tsx       # Login component tests (validation, hashing notice)
 │   ├── components/
-│   │   ├── ui/                  # shadcn accessible primitives
-│   │   ├── ChatWindow.tsx       # Live SSE markdown renderer
-│   │   ├── DocumentLibrary.tsx  # CRUD UI for metadata & vector tables
-│   │   ├── DocumentSidebar.tsx  # Multipart upload dropzone
-│   │   └── ThoughtStream.tsx    # Real-time LangGraph node execution feed
+│   │   ├── ui/                  # shadcn primitives
+│   │   ├── ChatWindow.tsx       # SSE markdown renderer
+│   │   ├── DocumentLibrary.tsx  # CRUD UI (uses sessionId)
+│   │   ├── DocumentSidebar.tsx  # Upload (uses sessionId)
+│   │   ├── ThoughtStream.tsx    # Real‑time agent feed
+│   │   └── Login.tsx            # Web Crypto hashing
 │   ├── hooks/
-│   │   └── useChatStream.ts     # Custom chunk-buffering SSE Parser
+│   │   └── useChatStream.ts     # SSE parser (uses sessionId)
 │   ├── lib/
-│   │   ├── api.ts               # Centralized HTTP client layer
+│   │   ├── api.ts               # HTTP client (sessionId required)
 │   │   └── utils.ts             
 │   ├── store/
-│   │   └── chatStore.ts         # Zustand global state
-│   ├── App.tsx                  # Root layout & view controller
+│   │   └── chatStore.ts         # Zustand (sessionId + messages)
+│   ├── App.tsx                  # Conditional rendering (Login / Main)
 │   └── main.tsx                 
 ├── package.json                 
 ├── tailwind.config.js           
-└── vite.config.ts               
+├── vite.config.ts               
+└── vitest.config.ts             # Vitest configuration
 ```
 
 ---
@@ -230,7 +285,7 @@ API_PORT=8000
 cd backend
 docker compose up --build -d
 ```
-*This spins up the PostgreSQL container and the FastAPI server. The database schema will initialize automatically.*
+*This spins up the PostgreSQL container and the FastAPI server. The database schema will initialize automatically with the `owner_id` column.*
 
 **Start the Frontend:**
 ```bash
@@ -240,16 +295,18 @@ npm run dev
 ```
 *The Vite server will start on `http://localhost:5173` and automatically proxy API calls to port `8000`.*
 
+**Important:** The backend also serves the compiled frontend from its dist folder. When you visit `http://localhost:8000` (or your production domain), you will see the last built version of the UI. If you make changes to the frontend, you must rebuild it and copy the updated dist folder to the backend/dist directory (or, if you are using Docker, the dist folder is mounted from the host, so after building the frontend, the changes will be reflected automatically when you restart the backend container). For local development with hot‑reload, use the Vite dev server on port 5173. For production, the backend serves the static dist files.
+
 ---
 
 ## ☁️ Microsoft Azure Production Deployment
 
-This architecture is optimized to run on a lightweight Azure B-Series Virtual Machine (e.g., `Standard_B2ats_v2` with 1 GiB RAM) using virtual swap memory to support the local HuggingFace embedding models and ChromaDB without triggering Out-of-Memory (OOM) crashes.
+This architecture is optimized to run on a lightweight Azure B‑Series Virtual Machine (e.g., `Standard_B2ats_v2` with 1 GiB RAM) using virtual swap memory to support the local HuggingFace embedding models and ChromaDB without triggering OOM crashes.
 
 ### 1. Provision the Infrastructure
 1. Create an **Ubuntu 22.04 LTS** instance in the Azure Portal.
 2. Under **Inbound port rules**, ensure both **SSH (22)** and **HTTP (80)** are allowed.
-3. Securely download your `.pem` SSH key and connect to the server:
+3. Securely download your `.pem` SSH key and connect:
    ```bash
    ssh -i <your-key.pem> azureuser@<YOUR_AZURE_IP>
    ```
@@ -287,7 +344,7 @@ To provision a free SSL certificate via Let's Encrypt, you cannot use a raw IP a
 2. Click on the **Public IP address** located in the *Essentials* section.
 3. Navigate to **Configuration** (under Settings).
 4. Enter your preferred domain prefix in the **DNS name label** text box.
-5. Click **Save**. Your domain is now formally registered (e.g., `[https://shriram-agentic-rag.austriaeast.cloudapp.azure.com/](https://shriram-agentic-rag.austriaeast.cloudapp.azure.com/)`).
+5. Click **Save**. Your domain is now formally registered (e.g., `https://shriram-agentic-rag.austriaeast.cloudapp.azure.com/`).
 
 ### 6. Configure Reverse Proxy & SSL (Caddy)
 To secure the application with HTTPS and allow the secure internal Docker user (`appuser`) to write the ChromaDB SQLite database to the host machine:
@@ -340,16 +397,32 @@ sudo docker compose up --build -d
 
 ## 🧪 Testing Suite & Reliability
 
-To ensure robust CI/CD, the backend implements a specialized `pytest` suite.
+To ensure robust CI/CD, the project includes both backend and frontend test suites.
 
-* **Unit Tests (`test_ingestion.py`):** Ensures text splitters do not breach token boundaries and verifies async exception handling if ChromaDB threading fails.
-* **Integration Tests (`test_integration.py`):** An end-to-end loop that uploads a physical markdown file, polls the metadata tool to verify ingestion, and validates the HTTP fragmented JSON stream (SSE) outputs.
+### Backend Tests (Python / Pytest)
+* **Unit Tests (`test_ingestion.py`):** Verifies text chunking, `owner_id` metadata attachment, and garbage collector logic (mocking).
+* **Integration Tests (`test_integration.py`):** End‑to‑end tests simulating two distinct users (User A and User B). Uploads a document for User A and verifies that User B cannot access it. Also tests agent memory by establishing a fact and asking the same session to recall it.
 
-**Run locally:**
+**Run backend tests locally:**
 ```bash
 cd backend
 python tests/run_tests.py
 ```
+
+### Frontend Tests (React / Vitest)
+The frontend includes a compact, reliable test suite covering:
+
+- **API client:** Verifies every endpoint correctly attaches the `session_id`.
+- **Login component:** Validates form rendering, validation errors, and the 24‑hour wipe warning.
+- **App routing:** Ensures the login screen appears when no `sessionId` is present, and the main app loads when a session exists.
+
+**Run frontend tests locally:**
+```bash
+cd frontend
+npm test
+```
+
+All tests are designed to run in CI/CD pipelines (GitHub Actions, etc.) and ensure that both the backend and frontend remain stable as the codebase evolves.
 
 ---
 
@@ -360,5 +433,4 @@ python tests/run_tests.py
 * **OpenTelemetry:** Add distributed tracing across the FastAPI gateway, LangGraph orchestrator, and Gemini API to identify bottlenecks in the reasoning loop visually.
 
 ## Copyright
-**Copyright (c) 2026 [Shriram Govindarajan](https://shriram.is-a.dev). All Rights Reserved.**
-This repository is available for review purposes only in connection with job applications. No license is granted to use, copy, distribute, or modify this code.
+**Copyright (c) 2026 [Shriram Govindarajan](https://shriram.is-a.dev). All Rights Reserved.** This repository is available for review purposes only in connection with job applications. No license is granted to use, copy, distribute, or modify this code.

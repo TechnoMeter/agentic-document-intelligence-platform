@@ -22,11 +22,13 @@ export function DocumentLibrary() {
   
   const setView = useChatStore((state) => state.setView);
   const setPendingPrompt = useChatStore((state) => state.setPendingPrompt);
+  const sessionId = useChatStore((state) => state.sessionId);
 
   const fetchDocs = async () => {
+    if (!sessionId) return;
     setIsLoading(true);
     try {
-      const data = await api.getDocuments();
+      const data = await api.getDocuments(sessionId);
       setDocuments(data.documents);
     } catch (err) {
       console.error(err);
@@ -37,22 +39,24 @@ export function DocumentLibrary() {
 
   useEffect(() => {
     fetchDocs();
-  }, []);
+  }, [sessionId]);
 
   const handleToggle = async (id: number, currentStatus: boolean) => {
+    if (!sessionId) return;
     setDocuments(docs => docs.map(d => d.id === id ? { ...d, is_active: !currentStatus } : d));
     try {
-      await api.toggleDocument(id, !currentStatus);
+      await api.toggleDocument(id, !currentStatus, sessionId);
     } catch (err) {
       setDocuments(docs => docs.map(d => d.id === id ? { ...d, is_active: currentStatus } : d));
     }
   };
 
   const handleDelete = async (id: number, filename: string) => {
+    if (!sessionId) return;
     if (!confirm(`Are you sure you want to delete ${filename} from the vector store?`)) return;
     setDocuments(docs => docs.filter(d => d.id !== id));
     try {
-      await api.deleteDocument(id, filename);
+      await api.deleteDocument(id, filename, sessionId);
     } catch (err) {
       fetchDocs();
     }
@@ -64,6 +68,7 @@ export function DocumentLibrary() {
   };
 
   const toggleExpand = async (doc: DocumentRecord) => {
+    if (!sessionId) return;
     if (expandedId === doc.id) {
       setExpandedId(null);
       return;
@@ -71,7 +76,7 @@ export function DocumentLibrary() {
     setExpandedId(doc.id);
     setChunksLoading(true);
     try {
-      const data = await api.getDocumentChunks(doc.filename);
+      const data = await api.getDocumentChunks(doc.filename, sessionId);
       setChunks(data.chunks || []);
     } catch (err) {
       setChunks(['Failed to load vector chunks.']);

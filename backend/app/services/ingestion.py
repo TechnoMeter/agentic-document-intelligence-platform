@@ -1,3 +1,5 @@
+# This module handles the ingestion of various document types, extracting text content, splitting it into chunks, and storing it in a vector database for later retrieval by the agent.
+
 import logging
 import uuid
 import io
@@ -59,7 +61,6 @@ class DocumentProcessor:
             return "\n".join(text)
             
         elif ext == 'xlsx':
-            # Note: data_only=True evaluates formulas to their cached values
             wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
             text = []
             for sheet in wb.worksheets:
@@ -75,7 +76,6 @@ class DocumentProcessor:
             return "\n".join([" ".join(row) for row in reader])
             
         elif ext == 'json':
-            # Parses JSON and serializes it prettified so the text splitter handles it logically
             data = json.loads(content.decode("utf-8", errors="ignore"))
             return json.dumps(data, indent=2)
             
@@ -91,7 +91,6 @@ class DocumentProcessor:
             return "\n".join([str(p) for p in doc.getElementsByType(P)])
             
         elif ext == 'epub':
-            # Epub format handling struggles with raw BytesIO buffers, temp file is safer
             with tempfile.NamedTemporaryFile(delete=False, suffix=".epub") as temp:
                 temp.write(content)
                 temp_path = temp.name
@@ -110,47 +109,46 @@ class DocumentProcessor:
         else:
             raise ValueError(f"No text extraction logic defined for extension: {ext}")
 
-    def _split_and_embed(self, text_content: str, filename: str) -> int:
+    def _split_and_embed(self, text_content: str, filename: str, owner_id: str) -> int:
         chunks = self.splitter.split_text(text_content)
         if not chunks:
             return 0
             
-        metadatas = [{"source": filename, "chunk_index": i} for i in range(len(chunks))]
+        metadatas = [{"source": filename, "chunk_index": i, "owner_id": owner_id} for i in range(len(chunks))]
         ids = [str(uuid.uuid4()) for _ in range(len(chunks))]
         self.vector_store.add_texts(texts=chunks, metadatas=metadatas, ids=ids)
         return len(chunks)
 
-    async def process_and_store(self, filename: str, content: bytes) -> None:
-        logger.info(f"Starting async ingestion for {filename}")
+    async def process_and_store(self, filename: str, content: bytes, owner_id: str) -> None:
+        logger.info(f"Starting async ingestion for {filename} for owner {owner_id}")
         try:
-            # Offload synchronous CPU-bound extraction to a thread
             text_content = await asyncio.to_thread(self._extract_text, content, filename)
 
             if not text_content.strip():
                 logger.warning(f"No extractable text found in {filename}.")
                 return
 
-            chunk_count = await asyncio.to_thread(self._split_and_embed, text_content, filename)
+            chunk_count = await asyncio.to_thread(self._split_and_embed, text_content, filename, owner_id)
 
             file_type = filename.split('.')[-1].lower()
-            await asyncio.to_thread(self._insert_metadata, filename, file_type, chunk_count)
+            await asyncio.to_thread(self._insert_metadata, filename, file_type, chunk_count, owner_id)
             logger.info(f"Ingestion complete for {filename}. Chunks: {chunk_count}")
 
         except Exception as e:
             logger.error(f"Ingestion failed for {filename}: {str(e)}", exc_info=True)
             raise
 
-    def _insert_metadata(self, filename: str, file_type: str, chunk_count: int):
+    def _insert_metadata(self, filename: str, file_type: str, chunk_count: int, owner_id: str):
         with get_db_connection() as conn:
             if USE_POSTGRES:
                 with conn.cursor() as cur:
                     cur.execute(
-                        "INSERT INTO documents (filename, file_type, chunk_count) VALUES (%s, %s, %s)",
-                        (filename, file_type, chunk_count)
+                        "INSERT INTO documents (filename, file_type, chunk_count, owner_id) VALUES (%s, %s, %s, %s)",
+                        (filename, file_type, chunk_count, owner_id)
                     )
             else:
                 conn.execute(
-                    "INSERT INTO documents (filename, file_type, chunk_count) VALUES (?, ?, ?)",
-                    (filename, file_type, chunk_count)
+                    "INSERT INTO documents (filename, file_type, chunk_count, owner_id) VALUES (?, ?, ?, ?)",
+                    (filename, file_type, chunk_count, owner_id)
                 )
             conn.commit()

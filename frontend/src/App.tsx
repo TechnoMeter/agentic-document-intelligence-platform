@@ -6,14 +6,18 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useChatStore } from '@/store/chatStore';
 import { Database, MessageSquare, BookOpen, Layers, Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Login } from '@/components/Login';
 
 function App() {
-  const { currentView, setView, isMobileMenuOpen, setMobileMenuOpen } = useChatStore();
+  const { currentView, setView, isMobileMenuOpen, setMobileMenuOpen, sessionId } = useChatStore();
+
+  if (!sessionId) {
+    return <Login />;
+  }
 
   return (
     <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden font-sans text-slate-100 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#003B5C] via-[#051B2C] to-[#000000]">
       
-      {/* Mobile Header */}
       <header className="md:hidden flex items-center justify-between p-4 bg-black/20 backdrop-blur-md border-b border-white/10 z-30 relative shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-gradient-to-b from-blue-300 to-blue-600 flex items-center justify-center shadow-[inset_0_1px_2px_rgba(255,255,255,0.8),_0_0_15px_rgba(59,130,246,0.6)] border border-white/40">
@@ -29,7 +33,6 @@ function App() {
         </button>
       </header>
 
-      {/* Mobile Sidebar Overlay */}
       {isMobileMenuOpen && (
         <div 
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden" 
@@ -37,7 +40,6 @@ function App() {
         />
       )}
       
-      {/* Sidebar: Frosted Aero Glass */}
       <aside className={cn(
         "fixed inset-y-0 left-0 z-50 w-[280px] bg-[#051B2C]/95 md:bg-white/5 backdrop-blur-2xl border-r border-white/10 shadow-[inset_-1px_0_0_rgba(255,255,255,0.05),_5px_0_30px_rgba(0,0,0,0.5)] flex-col transition-transform duration-300 ease-in-out md:relative md:translate-x-0 md:flex",
         isMobileMenuOpen ? "translate-x-0 flex" : "-translate-x-full hidden"
@@ -87,13 +89,11 @@ function App() {
         </ScrollArea>
       </aside>
 
-      {/* Added `overflow-hidden` to explicitly prevent main view flex-blowout */}
       <main className="flex-1 flex flex-col min-w-0 bg-transparent relative z-10 overflow-hidden">
         {currentView === 'chat' && <ChatWindow />}
         {currentView === 'documents' && <DocumentLibrary />}
         {currentView === 'instructions' && (
           <ScrollArea className="flex-1 w-full h-full relative z-10 animate-in fade-in duration-200">
-            {/* CSS Grid acts as a layout firewall against children trying to stretch the width */}
             <div className="p-4 sm:p-8 max-w-4xl mx-auto w-full grid grid-cols-1">
               <div className="p-4 sm:p-6 md:p-8 bg-black/30 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),_0_15px_40px_rgba(0,0,0,0.5)] grid grid-cols-1 w-full min-w-0 break-words">
                 <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2 mb-2 drop-shadow-md">
@@ -107,7 +107,6 @@ function App() {
                   The system enforces strict decoupling between data ingestion (Write Path) and agentic reasoning (Read Path) to ensure high concurrency and zero UI blocking.
                 </p>
                 
-                {/* max-w-full added to explicitly bind to the grid border */}
                 <div className="w-full max-w-full overflow-x-auto my-4 border border-white/10 bg-white/5 rounded-lg backdrop-blur-sm">
                   <table className="w-full text-xs text-left min-w-[600px]">
                     <thead>

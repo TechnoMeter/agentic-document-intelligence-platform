@@ -1,20 +1,22 @@
 import { useState } from 'react';
 import { api } from '@/lib/api';
+import { useChatStore } from '@/store/chatStore';
 import { FileUp, Loader2, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function DocumentSidebar() {
   const [status, setStatus] = useState<'idle' | 'uploading' | 'success'>('idle');
   const [fileName, setFileName] = useState<string>('');
+  const sessionId = useChatStore((state) => state.sessionId);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file || !sessionId) return;
 
     setFileName(file.name);
     setStatus('uploading');
     try {
-      await api.uploadFile(file);
+      await api.uploadFile(file, sessionId);
       setStatus('success');
       setTimeout(() => {
         setStatus('idle');
@@ -50,7 +52,6 @@ export function DocumentSidebar() {
           type="file" 
           className="hidden" 
           onChange={handleFileUpload} 
-          /* UPDATED: Aligned with the 13 backend allowed_extensions */
           accept=".txt,.pdf,.md,.docx,.xlsx,.pptx,.csv,.json,.html,.xml,.epub,.odt,.rtf" 
         />
       </label>

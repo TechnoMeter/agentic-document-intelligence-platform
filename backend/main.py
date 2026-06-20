@@ -2,21 +2,24 @@ import logging
 import asyncio
 import sys
 import json
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException
+import os
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException, Query, Form
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 
 from app.services.ingestion import DocumentProcessor
 from app.agent.graph import app_agent
 from app.database import get_db_connection, USE_POSTGRES
 from app.services.vector_store import get_vector_store
-
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-import os
+import datetime
 
 load_dotenv()
 
@@ -27,7 +30,58 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Agentic RAG Gateway")
+# ---- Lifespan for scheduler ----
+scheduler = AsyncIOScheduler()
+
+async def cleanup_expired_documents():
+    """Delete documents older than 24 hours and their vectors."""
+    cutoff = datetime.datetime.now() - datetime.timedelta(hours=24)
+    logger.info(f"Running cleanup for documents older than {cutoff}")
+    try:
+        with get_db_connection() as conn:
+            cur = conn.cursor()
+            if USE_POSTGRES:
+                cur.execute(
+                    "SELECT id, filename, owner_id FROM documents WHERE upload_date < %s",
+                    (cutoff,)
+                )
+            else:
+                cur.execute(
+                    "SELECT id, filename, owner_id FROM documents WHERE upload_date < ?",
+                    (cutoff,)
+                )
+            expired = cur.fetchall()
+            if not expired:
+                logger.info("No expired documents found.")
+                return
+
+            vector_store = get_vector_store()
+            for doc_id, filename, owner_id in expired:
+                try:
+                    vector_store._collection.delete(
+                        where={"$and": [{"source": filename}, {"owner_id": owner_id}]}
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to delete vectors for {filename} (owner {owner_id}): {e}")
+                if USE_POSTGRES:
+                    cur.execute("DELETE FROM documents WHERE id = %s", (doc_id,))
+                else:
+                    cur.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
+            conn.commit()
+            logger.info(f"Deleted {len(expired)} expired documents and their vectors.")
+    except Exception as e:
+        logger.error(f"Cleanup error: {e}", exc_info=True)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    scheduler.add_job(cleanup_expired_documents, trigger=IntervalTrigger(hours=1))
+    scheduler.start()
+    logger.info("Scheduler started for hourly cleanup.")
+    yield
+    scheduler.shutdown()
+    logger.info("Scheduler shut down.")
+
+app = FastAPI(title="Agentic RAG Gateway", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -40,26 +94,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 processor = DocumentProcessor()
 
 class ChatRequest(BaseModel):
     message: str
+    session_id: str = "default_session"
 
 # ----- SSE Streaming Generator -----
-async def stream_agent_response(message: str):
+async def stream_agent_response(message: str, session_id: str):
     initial_state = {"messages": [HumanMessage(content=message)]}
+    config = {"configurable": {"thread_id": session_id}}
+    
     try:
         has_streamed = False
 
-        # Stream all events from the LangGraph execution
-        async for event in app_agent.astream_events(initial_state, version="v2"):
+        async for event in app_agent.astream_events(initial_state, config=config, version="v2"):
             kind = event["event"]
             
-            # 1. Surface Token Generation
             if kind == "on_chat_model_stream":
                 chunk = event["data"]["chunk"]
                 if chunk.content:
-                    # Normalize LangChain 1.x / Gemini 3.x content blocks to a string
                     content_data = chunk.content
                     token_text = ""
                     
@@ -76,7 +131,6 @@ async def stream_agent_response(message: str):
                         has_streamed = True
                         yield f"data: {json.dumps({'token': token_text})}\n\n"
             
-            # 2. Surface AI "Thoughts" (Tool Execution Tracking)
             elif kind == "on_tool_start":
                 tool_name = event.get("name", "unknown_tool")
                 yield f"data: {json.dumps({'thought': f'Agent reasoning: Invoking {tool_name} tool...'})}\n\n"
@@ -96,17 +150,14 @@ async def stream_agent_response(message: str):
 async def ping():
     return {"status": "ok"}
 
-# @app.get("/")
-# async def root():
-#     return {"status": "Agentic RAG API is running"}
-
 @app.post("/api/v1/chat")
 async def chat_endpoint(request: ChatRequest):
-    logger.info(f"Received chat: {request.message[:50]}...")
+    logger.info(f"Received chat: {request.message[:50]}... Thread: {request.session_id}")
     try:
         initial_state = {"messages": [HumanMessage(content=request.message)]}
-        final_state = await app_agent.ainvoke(initial_state)
-        # LangGraph appends to the messages list; the final response is the last item
+        config = {"configurable": {"thread_id": request.session_id}}
+        
+        final_state = await app_agent.ainvoke(initial_state, config=config)
         agent_response = final_state["messages"][-1].content
         return {"reply": agent_response}
     except Exception as e:
@@ -116,14 +167,18 @@ async def chat_endpoint(request: ChatRequest):
 @app.post("/api/v1/chat/stream")
 async def chat_stream_endpoint(request: ChatRequest):
     return StreamingResponse(
-        stream_agent_response(request.message),
+        stream_agent_response(request.message, request.session_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
     )
 
 @app.post("/api/v1/upload")
-async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
-    allowed_extensions = ('.txt', '.pdf', '.md'  ,'.docx','.xlsx', '.pptx', '.csv', '.json', '.html', '.xml', '.epub', '.odt', '.rtf')
+async def upload_document(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    session_id: str = Form(...)
+):
+    allowed_extensions = ('.txt', '.pdf', '.md', '.docx', '.xlsx', '.pptx', '.csv', '.json', '.html', '.xml', '.epub', '.odt', '.rtf')
     if not file.filename.lower().endswith(allowed_extensions):
         raise HTTPException(status_code=400, detail="Unsupported file format.")
     try:
@@ -131,17 +186,24 @@ async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File read error: {str(e)}")
 
-    background_tasks.add_task(processor.process_and_store, file.filename, content)
+    background_tasks.add_task(processor.process_and_store, file.filename, content, session_id)
     return JSONResponse(status_code=202, content={"message": "Accepted", "filename": file.filename})
 
-# ----- Document Library CRUD Endpoints -----
-
 @app.get("/api/v1/documents")
-async def get_all_documents():
+async def get_all_documents(session_id: str = Query(...)):
     try:
         with get_db_connection() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT id, filename, file_type, upload_date, chunk_count, is_active FROM documents ORDER BY upload_date DESC")
+            if USE_POSTGRES:
+                cur.execute(
+                    "SELECT id, filename, file_type, upload_date, chunk_count, is_active FROM documents WHERE owner_id = %s ORDER BY upload_date DESC",
+                    (session_id,)
+                )
+            else:
+                cur.execute(
+                    "SELECT id, filename, file_type, upload_date, chunk_count, is_active FROM documents WHERE owner_id = ? ORDER BY upload_date DESC",
+                    (session_id,)
+                )
             rows = cur.fetchall()
             
             docs = [{
@@ -154,75 +216,103 @@ async def get_all_documents():
         raise HTTPException(status_code=500, detail="Database query failed.")
 
 @app.get("/api/v1/documents/{filename}/chunks")
-async def get_document_chunks(filename: str):
+async def get_document_chunks(filename: str, session_id: str = Query(...)):
     try:
         vector_store = get_vector_store()
-        # Use public similarity_search instead of internal _collection
-        results = vector_store.similarity_search("", k=3, filter={"source": filename})
+        results = vector_store.similarity_search(
+            "", k=3, filter={"$and": [{"source": filename}, {"owner_id": session_id}]}
+        )
         chunks = [doc.page_content for doc in results]
         return {"chunks": chunks}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/api/v1/documents/{doc_id}/toggle")
-async def toggle_document(doc_id: int, request: dict):
-    # Support both snake_case and camelCase to prevent silent failure if frontend uses camelCase
-    is_active = request.get("is_active")
-    if is_active is None:
-        is_active = request.get("isActive", True)
-
+async def toggle_document(doc_id: int, session_id: str = Query(...), is_active: bool = Query(...)):
     try:
         with get_db_connection() as conn:
             cur = conn.cursor()
-            # For PostgreSQL, add row-level locking to prevent race conditions
             if USE_POSTGRES:
-                # Lock the row before updating
-                cur.execute("SELECT is_active FROM documents WHERE id = %s FOR UPDATE", (doc_id,))
-            query = "UPDATE documents SET is_active = %s WHERE id = %s" if USE_POSTGRES else "UPDATE documents SET is_active = ? WHERE id = ?"
-            cur.execute(query, (is_active, doc_id))
+                cur.execute("SELECT id FROM documents WHERE id = %s AND owner_id = %s", (doc_id, session_id))
+            else:
+                cur.execute("SELECT id FROM documents WHERE id = ? AND owner_id = ?", (doc_id, session_id))
+            if not cur.fetchone():
+                raise HTTPException(status_code=404, detail="Document not found for this session.")
+            
+            if USE_POSTGRES:
+                cur.execute("UPDATE documents SET is_active = %s WHERE id = %s", (is_active, doc_id))
+            else:
+                cur.execute("UPDATE documents SET is_active = ? WHERE id = ?", (is_active, doc_id))
             conn.commit()
         return {"status": "success", "is_active": is_active}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/v1/documents/{doc_id}")
-async def delete_document(doc_id: int, filename: str):
+async def delete_document(doc_id: int, session_id: str = Query(...)):
     try:
         with get_db_connection() as conn:
             cur = conn.cursor()
-            query = "DELETE FROM documents WHERE id = %s" if USE_POSTGRES else "DELETE FROM documents WHERE id = ?"
-            cur.execute(query, (doc_id,))
+            if USE_POSTGRES:
+                cur.execute("SELECT filename, owner_id FROM documents WHERE id = %s", (doc_id,))
+            else:
+                cur.execute("SELECT filename, owner_id FROM documents WHERE id = ?", (doc_id,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Document not found.")
+            filename, owner_id = row
+            if owner_id != session_id:
+                raise HTTPException(status_code=403, detail="Not authorized to delete this document.")
+        
+        with get_db_connection() as conn:
+            cur = conn.cursor()
+            if USE_POSTGRES:
+                cur.execute("DELETE FROM documents WHERE id = %s", (doc_id,))
+            else:
+                cur.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
             conn.commit()
-            
+        
         vector_store = get_vector_store()
-        vector_store._collection.delete(where={"source": filename})
+        vector_store._collection.delete(
+            where={"$and": [{"source": filename}, {"owner_id": owner_id}]}
+        )
         return {"status": "deleted"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ----- Tool Endpoints -----
-# Kept for backward compatibility if the React UI calls them directly, 
-# but the Agent now accesses these internally via LangChain tools.
 @app.get("/api/v1/tools/document_count")
-async def tool_document_count():
+async def tool_document_count(session_id: str = Query(...)):
     try:
         with get_db_connection() as conn:
             cur = conn.cursor()
-            query = "SELECT COUNT(*) FROM documents WHERE is_active = true" if USE_POSTGRES else "SELECT COUNT(*) FROM documents WHERE is_active = 1"
-            cur.execute(query)
+            if USE_POSTGRES:
+                cur.execute("SELECT COUNT(*) FROM documents WHERE is_active = true AND owner_id = %s", (session_id,))
+            else:
+                cur.execute("SELECT COUNT(*) FROM documents WHERE is_active = 1 AND owner_id = ?", (session_id,))
             count = cur.fetchone()[0]
-        return {"result": f"There are {count} active documents in the system."}
+        return {"result": f"There are {count} active documents in your system."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/tools/recent_documents")
-async def tool_recent_documents(limit: int = 5):
+async def tool_recent_documents(session_id: str = Query(...), limit: int = 5):
     try:
         with get_db_connection() as conn:
             cur = conn.cursor()
-            query = "SELECT filename, upload_date, chunk_count, is_active FROM documents ORDER BY upload_date DESC LIMIT "
-            query += "%s" if USE_POSTGRES else "?"
-            cur.execute(query, (limit,))
+            if USE_POSTGRES:
+                cur.execute(
+                    "SELECT filename, upload_date, chunk_count, is_active FROM documents WHERE owner_id = %s ORDER BY upload_date DESC LIMIT %s",
+                    (session_id, limit)
+                )
+            else:
+                cur.execute(
+                    "SELECT filename, upload_date, chunk_count, is_active FROM documents WHERE owner_id = ? ORDER BY upload_date DESC LIMIT ?",
+                    (session_id, limit)
+                )
             rows = cur.fetchall()
             
         if not rows:
@@ -237,13 +327,20 @@ async def tool_recent_documents(limit: int = 5):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/tools/document_info")
-async def tool_document_info(filename: str):
+async def tool_document_info(filename: str, session_id: str = Query(...)):
     try:
         with get_db_connection() as conn:
             cur = conn.cursor()
-            query = "SELECT filename, upload_date, chunk_count, is_active FROM documents WHERE filename = "
-            query += "%s" if USE_POSTGRES else "?"
-            cur.execute(query, (filename,))
+            if USE_POSTGRES:
+                cur.execute(
+                    "SELECT filename, upload_date, chunk_count, is_active FROM documents WHERE filename = %s AND owner_id = %s",
+                    (filename, session_id)
+                )
+            else:
+                cur.execute(
+                    "SELECT filename, upload_date, chunk_count, is_active FROM documents WHERE filename = ? AND owner_id = ?",
+                    (filename, session_id)
+                )
             row = cur.fetchone()
             
         if row:
@@ -252,17 +349,11 @@ async def tool_document_info(filename: str):
         return {"result": f"No document named '{filename}' found."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
 
-    # ----- React Frontend Hosting -----
-    # 1. Mount the static assets (CSS/JS)
 app.mount("/assets", StaticFiles(directory="dist/assets"), name="assets")
 
-# 2. Catch-all route to serve the React index.html
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
-    # If the user asks for a specific file that exists in the root of dist
     if os.path.exists(f"dist/{full_path}") and full_path != "":
         return FileResponse(f"dist/{full_path}")
-    # Otherwise, return the main React app
     return FileResponse("dist/index.html")

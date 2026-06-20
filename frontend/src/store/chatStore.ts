@@ -17,11 +17,13 @@ interface ChatState {
   currentView: ViewType;
   pendingPrompt: string | null;
   isMobileMenuOpen: boolean;
+  sessionId: string | null;
   
   setLoading: (loading: boolean) => void;
   setView: (view: ViewType) => void;
   setPendingPrompt: (prompt: string | null) => void;
   setMobileMenuOpen: (open: boolean) => void;
+  setSessionId: (id: string) => void;
   addMessage: (message: Omit<Message, 'id'>) => void;
   updateLastMessageToken: (token: string, isStreaming?: boolean) => void;
   addThought: (thought: string) => void;
@@ -36,11 +38,13 @@ export const useChatStore = create<ChatState>((set) => ({
   currentView: 'chat',
   pendingPrompt: null,
   isMobileMenuOpen: false,
+  sessionId: null,
 
   setLoading: (loading) => set({ isLoading: loading }),
   setView: (view) => set({ currentView: view, isMobileMenuOpen: false }),
   setPendingPrompt: (prompt) => set({ pendingPrompt: prompt }),
   setMobileMenuOpen: (open) => set({ isMobileMenuOpen: open }),
+  setSessionId: (id) => set({ sessionId: id }),
   
   addMessage: (msg) => set((state) => ({
     messages: [...state.messages, { ...msg, id: Math.random().toString(36).substring(7) }]
@@ -53,17 +57,18 @@ export const useChatStore = create<ChatState>((set) => ({
     if (lastMsgIdx >= 0 && nextMessages[lastMsgIdx].role === 'assistant') {
       nextMessages[lastMsgIdx] = {
         ...nextMessages[lastMsgIdx],
-        content: nextMessages[lastMsgIdx].content + token,
+        content: isStreaming ? nextMessages[lastMsgIdx].content + token : token || nextMessages[lastMsgIdx].content,
         isStreaming
       };
     }
     return { messages: nextMessages };
   }),
-
+  
   addThought: (thought) => set((state) => ({
     thoughts: [...state.thoughts, thought]
   })),
-
+  
   clearThoughts: () => set({ thoughts: [] }),
+  
   clearChat: () => set({ messages: [], thoughts: [] })
 }));

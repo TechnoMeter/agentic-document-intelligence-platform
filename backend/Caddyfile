@@ -1,3 +1,7 @@
 shriram-agentic-rag.austriaeast.cloudapp.azure.com {
     reverse_proxy app:8000
 }
+
+localhost {
+    reverse_proxy app:8000
+}

@@ -1,3 +1,5 @@
+# This module defines the agent's reasoning graph for the document intelligence platform.
+
 import os
 from typing import TypedDict, Annotated, Sequence
 from langchain_core.messages import BaseMessage, SystemMessage
@@ -5,34 +7,38 @@ from langgraph.graph import StateGraph, END, add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.tools import tool
+from langgraph.checkpoint.memory import MemorySaver
 from app.services.vector_store import get_vector_store
 from app.database import get_db_connection, USE_POSTGRES
 from app.tools.metadata_tools import get_document_count, list_recent_documents, get_document_info
+from langchain_core.runnables import RunnableConfig
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Map the generic LLM_API_KEY to the Google-specific environment variable
 os.environ["GOOGLE_API_KEY"] = os.getenv("LLM_API_KEY", "")
 
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
 
-# Use native Gemini client to support thought_signatures required by 3.x models
 llm = ChatGoogleGenerativeAI(
     model=os.getenv("LLM_MODEL", "gemini-3.1-flash-lite"),
-    streaming=True
+    streaming=True,
+    model_kwargs={
+        "thinking_config": {"thinking_level": "HIGH"}
+    }
 )
 
 @tool
-async def search_active_documents(query: str) -> str:
+async def search_active_documents(query: str, config: RunnableConfig) -> str:
     """Search through the semantic contents of active uploaded documents to answer user queries."""
+    thread_id = config.get("configurable", {}).get("thread_id", "default_session")
     
     active_filenames = []
     with get_db_connection() as conn:
         cur = conn.cursor()
-        query_str = "SELECT filename FROM documents WHERE is_active = true" if USE_POSTGRES else "SELECT filename FROM documents WHERE is_active = 1"
-        cur.execute(query_str)
+        query_str = "SELECT filename FROM documents WHERE is_active = true AND owner_id = %s" if USE_POSTGRES else "SELECT filename FROM documents WHERE is_active = 1 AND owner_id = ?"
+        cur.execute(query_str, (thread_id,))
         active_filenames = [row[0] for row in cur.fetchall()]
         
     if not active_filenames:
@@ -42,7 +48,12 @@ async def search_active_documents(query: str) -> str:
     retriever = vector_store.as_retriever(
         search_kwargs={
             "k": 4,
-            "filter": {"source": {"$in": active_filenames}}
+            "filter": {
+                "$and": [
+                    {"source": {"$in": active_filenames}},
+                    {"owner_id": thread_id}
+                ]
+            }
         }
     )
     
@@ -64,20 +75,23 @@ async def search_active_documents(query: str) -> str:
 tools = [search_active_documents, get_document_count, list_recent_documents, get_document_info]
 llm_with_tools = llm.bind_tools(tools)
 
-SYSTEM_PROMPT = """You are an expert AI assistant for an Agentic Document Intelligence Platform. 
-You have access to tools to search document contents and retrieve system metadata. 
-Always use the provided tools to answer questions about uploaded files. 
-Synthesize the information cleanly using standard Markdown formatting. Do not hallucinate data."""
+SYSTEM_PROMPT = """You are ShriRAGx, an expert AI assistant for the Agentic Document Intelligence Platform. You are not a generic AI; you are ShriRAGx, built by Shriram Govindarajan.
+
+Your identity: You are a specialized assistant designed to help users explore and understand their uploaded documents. You are not from Google, and you do not have access to any information outside of the uploaded documents and the tools provided.
+
+When a user asks about who you are, you must respond exactly as follows:
+"I am ShriRAGx, your assistant for exploring and understanding your uploaded documents. I can search through the contents of your active files and provide insights based on that information. And you were made by: Shriram Govindarajan, a software engineer and AI enthusiast with a passion for building intelligent systems that help people make sense of their data."
+
+Do not say you are an AI, an AI model, an autonomous agent, or anything similar. Do not mention Google, or any other company. Always present yourself as a helpful assistant focused on providing insights from the user's documents.
+
+You have access to tools to search document contents and retrieve system metadata. Always use the provided tools to answer questions about uploaded files. Synthesize the information cleanly using standard Markdown formatting. Do not hallucinate data."""
 
 def initialize_state(state: AgentState) -> dict:
-    """Inject the system prompt only once at the start of the conversation."""
-    # Check if system message already present
     if not any(isinstance(m, SystemMessage) for m in state["messages"]):
         return {"messages": [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]}
     return {}
 
 async def agent_node(state: AgentState) -> dict:
-    # System message is already in the state; just pass the messages
     messages = state["messages"]
     response = await llm_with_tools.ainvoke(messages)
     return {"messages": [response]}
@@ -94,4 +108,5 @@ workflow.add_edge("init", "agent")
 workflow.add_conditional_edges("agent", tools_condition)
 workflow.add_edge("tools", "agent")
 
-app_agent = workflow.compile()
+memory = MemorySaver()
+app_agent = workflow.compile(checkpointer=memory)

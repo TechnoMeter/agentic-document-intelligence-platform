@@ -40,7 +40,6 @@ downloads/
 eggs/
 .eggs/
 parts/
-sdist/
 var/
 wheels/
 share/python-wheels/
@@ -88,7 +87,6 @@ out/
 .turbo/
 
 # Vite build outputs
-dist-ssr/
 *.local
 
 # ==========================================
