@@ -82,23 +82,26 @@ export function Login() {
   };
 
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#003B5C] via-[#051B2C] to-[#000000] p-4">
-      <div className="w-full max-w-md bg-white/5 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),_0_15px_40px_rgba(0,0,0,0.5)] p-8 animate-in fade-in duration-500">
+    /* FIXED: Changed h-screen to min-h-[100dvh] and added py-12 for scroll spacing */
+    <div className="flex min-h-[100dvh] w-full items-center justify-center bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#003B5C] via-[#051B2C] to-[#000000] p-4 py-12">
+      
+      /* FIXED: Changed p-8 to p-5 sm:p-8 to save horizontal space on mobile */
+      <div className="w-full max-w-md bg-white/5 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),_0_15px_40px_rgba(0,0,0,0.5)] p-5 sm:p-8 animate-in fade-in duration-500">
         
         <div className="flex flex-col items-center space-y-4 text-center">
           <div className="w-16 h-16 rounded-full bg-gradient-to-b from-blue-300 to-blue-600 flex items-center justify-center shadow-[inset_0_1px_2px_rgba(255,255,255,0.8),_0_0_25px_rgba(59,130,246,0.6)] border border-white/40">
             <Database className="w-8 h-8 text-white drop-shadow-md" />
           </div>
           <h1 className="text-2xl font-bold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">ShriRAGx</h1>
-<div className="text-center text-blue-100/70">
-  <p className="text-sm font-medium">Upload your files. Ask anything. Get clear answers – instantly.</p>
-  <p className="text-xs text-blue-100/50 mt-1">Just your documents and our AI. It's that easy.</p>
-  
-</div>
+          <div className="text-center text-blue-100/70">
+            <p className="text-sm font-medium">Upload your files. Ask anything. Get clear answers – instantly.</p>
+            <p className="text-xs text-blue-100/50 mt-1">Just your documents and our AI. It's that easy.</p>
+          </div>
+        </div> {/* FIXED: Properly closed the header layout container here */}
 
         {/* ===== RECENT PROFILES – CENTERED, LARGER, GREEN GLOW ===== */}
         {profiles.length > 0 && (
-          <div className="mt-6">
+          <div className="mt-8"> {/* Added slightly more top margin since it's no longer inside the flex-col */}
             <p className="text-xs font-medium text-blue-200/60 uppercase tracking-wider text-center mb-3">
               Return to your session
             </p>
@@ -114,11 +117,11 @@ export function Login() {
                 </button>
               ))}
             </div>
-            <hr className="border-white/10 my-4" />
+            <hr className="border-white/10 my-6" />
           </div>
         )}
 
-        <div className="mt-4 p-4 bg-blue-900/40 border border-blue-400/30 rounded-xl flex items-start gap-3 text-sm text-blue-100/90 shadow-inner">
+        <div className="mt-6 p-4 bg-blue-900/40 border border-blue-400/30 rounded-xl flex items-start gap-3 text-sm text-blue-100/90 shadow-inner">
           <Info className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
           <div className="text-left">
             <p className="font-semibold text-white mb-1">No registration required.</p>
@@ -194,7 +197,7 @@ export function Login() {
           </form>
         )}
 
-        <div className="mt-6 flex items-center justify-center gap-2 text-xs text-blue-200/50 border-t border-white/10 pt-4">
+        <div className="mt-8 flex items-center justify-center gap-2 text-xs text-blue-200/50 border-t border-white/10 pt-4">
           <Clock className="w-4 h-4" />
           <span>All data and chats are automatically wiped after 24 hours.</span>
         </div>
