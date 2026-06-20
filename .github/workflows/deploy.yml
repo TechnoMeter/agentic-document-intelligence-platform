@@ -13,26 +13,22 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      # 1. Checkout the repository
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'   # Updated to Node.js 24 (LTS)
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
-      # 3. Install dependencies & build frontend
       - name: Build frontend
         working-directory: ./frontend
         run: |
-          npm ci          # Install ALL dependencies (including dev)
+          npm ci
           npm run build
 
-      # 4. Copy the built dist folder to the Azure VM via SCP
       - name: Copy dist to backend folder on VM
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -43,7 +39,6 @@ jobs:
           target: "~/agentic-document-intelligence-platform/backend"
           overwrite: true
 
-      # 5. Deploy backend with Docker
       - name: Deploy backend via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -52,9 +47,10 @@ jobs:
           key: ${{ secrets.AZURE_SSH_KEY }}
           script_stop: true
           script: |
-            cd ~/agentic-document-intelligence-platform/backend
-
-            # Move the copied dist folder to the correct location
+            cd ~/agentic-document-intelligence-platform
+            git reset --hard HEAD
+            git pull origin main
+            cd backend
             if [ -d "frontend/dist" ]; then
               echo "Moving frontend/dist to backend/dist..."
               rm -rf dist
@@ -63,17 +59,7 @@ jobs:
             else
               echo "WARNING: frontend/dist not found. Using existing dist if present."
             fi
-
-            # Pull latest code changes (if any backend files changed)
-            git pull origin main
-
-            # Shut down old containers
             sudo docker compose down
-
-            # Build and start new containers
             sudo docker compose up --build -d
-
-            # Prune old images to save disk space
             sudo docker image prune -f
-
             echo "Deployment finished successfully."
