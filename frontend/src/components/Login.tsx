@@ -82,10 +82,8 @@ export function Login() {
   };
 
   return (
-    /* FIXED: Changed h-screen to min-h-[100dvh] and added py-12 for scroll spacing */
     <div className="flex min-h-[100dvh] w-full items-center justify-center bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#003B5C] via-[#051B2C] to-[#000000] p-4 py-12">
       
-      /* FIXED: Changed p-8 to p-5 sm:p-8 to save horizontal space on mobile */
       <div className="w-full max-w-md bg-white/5 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),_0_15px_40px_rgba(0,0,0,0.5)] p-5 sm:p-8 animate-in fade-in duration-500">
         
         <div className="flex flex-col items-center space-y-4 text-center">
