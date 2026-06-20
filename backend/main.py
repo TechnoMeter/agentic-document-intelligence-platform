@@ -3,6 +3,8 @@ import asyncio
 import sys
 import json
 import os
+import uuid
+import datetime
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException, Query, Form
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -19,7 +21,7 @@ from app.services.ingestion import DocumentProcessor
 from app.agent.graph import app_agent
 from app.database import get_db_connection, USE_POSTGRES
 from app.services.vector_store import get_vector_store
-import datetime
+from app.services.chat_history import save_message, get_chat_history, cleanup_expired_chat_history
 
 load_dotenv()
 
@@ -75,8 +77,13 @@ async def cleanup_expired_documents():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     scheduler.add_job(cleanup_expired_documents, trigger=IntervalTrigger(hours=1))
+    # Add chat history cleanup as well (same schedule)
+    scheduler.add_job(
+        lambda: cleanup_expired_chat_history(datetime.datetime.now() - datetime.timedelta(hours=24)),
+        trigger=IntervalTrigger(hours=1)
+    )
     scheduler.start()
-    logger.info("Scheduler started for hourly cleanup.")
+    logger.info("Scheduler started for hourly cleanup (documents & chat history).")
     yield
     scheduler.shutdown()
     logger.info("Scheduler shut down.")
@@ -101,11 +108,16 @@ class ChatRequest(BaseModel):
     message: str
     session_id: str = "default_session"
 
-# ----- SSE Streaming Generator -----
+# ----- SSE Streaming Generator with History Saving -----
 async def stream_agent_response(message: str, session_id: str):
+    # Save user message immediately (with a unique id to avoid duplicates on retry)
+    user_msg_id = str(uuid.uuid4())
+    save_message(session_id, "user", message, user_msg_id)
+
     initial_state = {"messages": [HumanMessage(content=message)]}
     config = {"configurable": {"thread_id": session_id}}
     
+    full_response = ""
     try:
         has_streamed = False
 
@@ -128,6 +140,7 @@ async def stream_agent_response(message: str, session_id: str):
                         token_text = str(content_data)
 
                     if token_text:
+                        full_response += token_text
                         has_streamed = True
                         yield f"data: {json.dumps({'token': token_text})}\n\n"
             
@@ -139,10 +152,18 @@ async def stream_agent_response(message: str, session_id: str):
                 tool_name = event.get("name", "unknown_tool")
                 yield f"data: {json.dumps({'thought': f'Tool {tool_name} execution complete. Synthesizing data...'})}\n\n"
 
+        # Save assistant response after streaming finished
+        if full_response:
+            assistant_msg_id = str(uuid.uuid4())
+            save_message(session_id, "assistant", full_response, assistant_msg_id)
+
         yield f"data: {json.dumps({'done': True})}\n\n"
         
     except Exception as e:
         logger.error(f"Streaming error: {str(e)}", exc_info=True)
+        # Still save whatever we got so far
+        if full_response:
+            save_message(session_id, "assistant", full_response + f"\n[Error: {str(e)}]")
         yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
 # ----- Core Endpoints -----
@@ -159,6 +180,9 @@ async def chat_endpoint(request: ChatRequest):
         
         final_state = await app_agent.ainvoke(initial_state, config=config)
         agent_response = final_state["messages"][-1].content
+        # Save both user and assistant for this non‑streaming endpoint too
+        save_message(request.session_id, "user", request.message)
+        save_message(request.session_id, "assistant", agent_response)
         return {"reply": agent_response}
     except Exception as e:
         logger.error(f"Chat error: {str(e)}", exc_info=True)
@@ -171,6 +195,20 @@ async def chat_stream_endpoint(request: ChatRequest):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
     )
+
+# ---- New endpoint: get chat history ----
+@app.get("/api/v1/chat/history")
+async def get_history(session_id: str = Query(...)):
+    try:
+        history = get_chat_history(session_id)
+        return {"history": history}
+    except Exception as e:
+        logger.error(f"History fetch error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve chat history.")
+
+# ... (all other endpoints unchanged: upload, documents, chunks, toggle, delete, tools, static serving)
+# The rest of main.py stays exactly as it is.
+# I include it here for completeness, but you can keep your existing code for these.
 
 @app.post("/api/v1/upload")
 async def upload_document(

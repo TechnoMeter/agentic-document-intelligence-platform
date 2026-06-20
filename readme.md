@@ -75,7 +75,7 @@ The system was rebuilt to serve **multiple isolated users** without the overhead
 The application enforces a strict separation of concerns between the **Write Path** (heavy, asynchronous background file ingestion) and the **Read Path** (autonomous LLM reasoning, retrieval, and execution). The new multi‑tenant and memory layers are highlighted.
 
 ```mermaid
-graph TD
+flowchart TD
     %% Define Node Styles
     classDef frontend fill:#61dafb,stroke:#333,stroke-width:2px,color:#000;
     classDef backend fill:#389b82,stroke:#333,stroke-width:2px,color:#fff;
@@ -84,66 +84,70 @@ graph TD
     classDef agent fill:#9b59b6,stroke:#333,stroke-width:2px,color:#fff;
     classDef security fill:#e74c3c,stroke:#333,stroke-width:2px,color:#fff;
 
-    %% Logical Architectural Tiers
-    subgraph "1. Client Tier"
-        Client["React Frontend<br/>(Zustand + SSE Hook)"]:::frontend
-        Hasher["Web Crypto SHA-256<br/>(Client-Side Hashing)"]:::security
+    %% 1. Client Tier
+    subgraph Tier1 ["1. Client Tier"]
+        Client["React Frontend<br/>(Zustand + SSE)"]:::frontend
+        Hasher["Web Crypto SHA-256"]:::security
+        
+        %% Kept internal for neatness
+        Client <-->|"1. Auth Cycle"| Hasher
     end
 
-    subgraph "2. API Gateway Tier"
-        API["FastAPI Gateway<br/>(Async HTTP + SSE Stream)"]:::backend
+    %% 2. API Gateway Tier
+    subgraph Tier2 ["2. API Gateway"]
+        API["FastAPI Gateway<br/>(Async HTTP + SSE)"]:::backend
     end
 
-    subgraph "3. Orchestration & Processing Tier"
-        LangGraph["LangGraph State Machine<br/>(ReAct Orchestrator)"]:::agent
-        Memory["MemorySaver<br/>(Conversation Checkpoint)"]:::agent
-        Worker["Ingestion Pipeline<br/>(Threaded Text Chunking)"]:::backend
-        ToolNode["System Tool Node<br/>(SQL Provider)"]:::backend
-        Scheduler["APScheduler<br/>(Hourly Garbage Collection)"]:::backend
+    %% 3. Orchestration & Processing Tier
+    subgraph Tier3 ["3. Orchestration & Processing"]
+        Worker["Ingestion Pipeline"]:::backend
+        LangGraph["LangGraph Orchestrator"]:::agent
+        Memory["MemorySaver"]:::agent
+        ToolNode["System Tool Node"]:::backend
+        Scheduler["APScheduler"]:::backend
+
+        %% Internal Tier 3 interactions
+        LangGraph <-->|"D. State Checkpoint"| Memory
+        LangGraph -->|"F. Protocol Query"| ToolNode
+        
+        %% Invisible link to balance Worker and Scheduler horizontally
+        Worker ~~~ Scheduler
     end
 
-    subgraph "4. Data Storage Tier"
+    %% 4. Data Storage Tier
+    subgraph Tier4 ["4. Data Storage"]
         VectorDB[("ChromaDB<br/>(Semantic Vectors)")]:::db
-        SQL[("PostgreSQL<br/>(ACID Metadata)")]:::db
+        SQL[("PostgreSQL<br/>(Metadata & History)")]:::db
     end
 
-    subgraph "5. External Services"
-        LLM["Google Gemini API<br/>(Reasoning Engine)"]:::external
+    %% 5. External Services
+    subgraph Tier5 ["5. External Services"]
+        LLM["Google Gemini API"]:::external
     end
 
-    %% Edges - Authentication
-    Client -- "1. Hash Credentials" --> Hasher
-    Hasher -- "2. Return session_id" --> Client
-
-    %% Edges - Ingestion Flow
-    Client -- "3. Upload File" --> API
-    API -- "4. Background Task" --> Worker
-    Worker -- "5. Save Metadata" --> SQL
-    Worker -- "6. Store Embeddings" --> VectorDB
-
-    %% Edges - Query Flow
-    Client -- "A. Ask Question" --> API
-    API -- "B. Invoke Graph" --> LangGraph
+    %% ==========================================
+    %% CORE ROUTING
+    %% ==========================================
     
-    %% Split Bidirectional Arrows for Cleaner Routing
-    LangGraph -- "C. Send Prompt" --> LLM
-    LLM -- "C. Yield Tokens" --> LangGraph
+    Client <-->|"3, A: User Requests<br/>M: SSE Stream Up"| API
+    API <-->|"B: Invoke Graph<br/>L: Yield Event Stream"| LangGraph
     
-    LangGraph -- "D. Write Checkpoint" --> Memory
-    Memory -- "D. Read Checkpoint" --> LangGraph
+    %% Standard downward flows
+    API -->|"4. Background Task"| Worker
+    API --->|"H. Save User Msg (Pre‑Stream)"| SQL
     
-    %% Agent Tool Calls
-    LangGraph -- "E. Similarity Search" --> VectorDB
-    LangGraph -- "F. Protocol Query" --> ToolNode
-    ToolNode -- "G. DB Read/Write" --> SQL
+    Worker -->|"5. Save Metadata"| SQL
+    Worker -->|"6. Store Embeddings"| VectorDB
     
-    %% Garbage Collection
-    Scheduler -. "H. Hourly Cleanup" .-> SQL
-    Scheduler -. "I. Delete Expired" .-> VectorDB
-
-    %% Streaming Response
-    LangGraph -. "J. Yield Event Stream" .-> API
-    API -. "K. SSE Stream" .-> Client
+    LangGraph <-->|"C. Prompt / Tokens"| LLM
+    LangGraph -->|"E. Similarity Search"| VectorDB
+    API -->|"I. Save AI Msg (Post‑Stream)"| SQL
+    
+    ToolNode -->|"G. DB Read/Write"| SQL
+    
+    %% Background / Garbage Collection flows
+    Scheduler -.->|"J. Cleanup Docs/Chat"| SQL
+    Scheduler -.->|"K. Delete Vectors"| VectorDB
 ```
 
 ---
@@ -173,7 +177,10 @@ This guarantees the system remains responsive even with continuous uploads.
 ### 5. Client‑Side Hashing (Zero‑Trust Authentication)
 The frontend never sends plaintext passwords. Instead, it concatenates the username and password, applies the SHA‑256 algorithm via `crypto.subtle.digest()`, and stores the resulting 64‑character hex string as the `sessionId` in the Zustand store. This hash is used as the `owner_id` in all API calls. The backend remains completely stateless with respect to user credentials – it only sees the hash.
 
-### 6. Automated CI/CD Pipeline
+### 6. Persistent Chat History (Session‑Aware)
+Chat history is no longer ephemeral. All user and assistant messages are automatically saved to a dedicated `chat_history` table in PostgreSQL (or SQLite) and indexed by `session_id`. On login, the frontend loads the complete conversation history, allowing users to continue discussions seamlessly across page refreshes and browser restarts. The same 24‑hour garbage collection policy that purges expired documents also deletes old chat logs, ensuring the database remains lightweight and privacy‑compliant.
+
+### 7. Automated CI/CD Pipeline
 Deployments are fully automated via GitHub Actions. Pushes to the `main` branch trigger a secure SSH workflow that synchronizes the repository on the Azure VM, safely halts containers to prevent OOM errors, rebuilds the Docker environment, and aggressively prunes dangling images to conserve storage on the constrained VM disk.
 
 ---
@@ -188,7 +195,8 @@ The repository is built for horizontal scalability. Here is a technical breakdow
 * **`app/agent/graph.py` (Agent Logic):** The "brain". It compiles the LangGraph `StateGraph` with `MemorySaver` checkpointing. All tools (including `search_active_documents`) now accept a `RunnableConfig` parameter to extract the `thread_id` and enforce tenant isolation.
 * **`app/services/ingestion.py` (Asynchronous Data Pipeline):** Manages the `DocumentProcessor`. It now accepts an `owner_id` parameter, which is added to every chunk's metadata before storage in ChromaDB.
 * **`app/tools/metadata_tools.py` (Tool Registry):** All tools (e.g., `get_document_count`) now read the `thread_id` from the `config` object and append `AND owner_id = %s` to every SQL query.
-* **`app/database.py`:** The schema now includes an `owner_id` column with a default of `'default_session'`. An `ALTER TABLE` failsafe ensures existing databases are upgraded automatically.
+* **`app/services/chat_history.py`:** (New) Provides helper functions to insert user/assistant messages into the `chat_history` table and retrieve them by `session_id`. Used by both the streaming and non‑streaming chat endpoints.
+* **`app/database.py`:** The schema now includes a `documents` table (with `owner_id` for tenant isolation) **and** a new `chat_history` table (`id`, `session_id`, `role`, `content`, `created_at`) to persist conversational context across sessions.
 * **`tests/`:** The test suite has been expanded to cover multi‑tenant isolation, agent memory, and garbage collection logic.
 
 ### ⚛️ Frontend UI & State (React / TypeScript / Vite)
@@ -210,6 +218,7 @@ backend/
 │   ├── services/
 │   │   ├── ingestion.py         # Thread‑isolated async extraction (owner_id)
 │   │   └── vector_store.py      # ChromaDB interface
+│   │   └── chat_history.py      # Save & retrieve persistent messages
 │   ├── tools/
 │   │   └── metadata_tools.py    # SQL/LangChain Tool wrappers (tenant‑aware)
 │   └── database.py              # Connection pooling & schema (owner_id)
@@ -403,7 +412,7 @@ To ensure robust CI/CD, the project includes both backend and frontend test suit
 
 ### Backend Tests (Python / Pytest)
 * **Unit Tests (`test_ingestion.py`):** Verifies text chunking, `owner_id` metadata attachment, and garbage collector logic (mocking).
-* **Integration Tests (`test_integration.py`):** End‑to‑end tests simulating two distinct users (User A and User B). Uploads a document for User A and verifies that User B cannot access it. Also tests agent memory by establishing a fact and asking the same session to recall it.
+* **Integration Tests (`test_integration.py`):** End‑to‑end tests have been extended to validate that messages are correctly persisted and retrieved via the new `/api/v1/chat/history` endpoint, ensuring that chat history survives a session reload and remains isolated per tenant.
 
 **Run backend tests locally:**
 ```bash

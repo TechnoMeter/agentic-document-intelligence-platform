@@ -29,6 +29,8 @@ interface ChatState {
   addThought: (thought: string) => void;
   clearThoughts: () => void;
   clearChat: () => void;
+  // ---- NEW ----
+  setMessages: (messages: Message[]) => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -70,5 +72,8 @@ export const useChatStore = create<ChatState>((set) => ({
   
   clearThoughts: () => set({ thoughts: [] }),
   
-  clearChat: () => set({ messages: [], thoughts: [] })
+  clearChat: () => set({ messages: [], thoughts: [] }),
+
+  // ---- NEW ----
+  setMessages: (messages) => set({ messages }),
 }));

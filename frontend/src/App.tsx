@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { ChatWindow } from '@/components/ChatWindow';
 import { ThoughtStream } from '@/components/ThoughtStream';
 import { DocumentSidebar } from '@/components/DocumentSidebar';
@@ -7,9 +8,25 @@ import { useChatStore } from '@/store/chatStore';
 import { Database, MessageSquare, BookOpen, Layers, Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Login } from '@/components/Login';
+import { api } from '@/lib/api';
 
 function App() {
-  const { currentView, setView, isMobileMenuOpen, setMobileMenuOpen, sessionId } = useChatStore();
+  const { currentView, setView, isMobileMenuOpen, setMobileMenuOpen, sessionId, setMessages, addMessage } = useChatStore();
+
+  // Load chat history when sessionId becomes available
+  useEffect(() => {
+    if (sessionId) {
+      api.getChatHistory(sessionId)
+        .then(history => {
+          // Replace current messages with history (clear first)
+          setMessages([]);
+          history.forEach(msg => {
+            addMessage({ role: msg.role as 'user' | 'assistant', content: msg.content });
+          });
+        })
+        .catch(err => console.error('Failed to load chat history:', err));
+    }
+  }, [sessionId, setMessages, addMessage]);
 
   if (!sessionId) {
     return <Login />;

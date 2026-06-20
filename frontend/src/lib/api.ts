@@ -63,5 +63,13 @@ export const api = {
     if (!res.ok) throw new Error('Failed to fetch document count.');
     const data = await res.json();
     return data.result;
+  },
+
+  // ---- NEW ----
+  async getChatHistory(sessionId: string): Promise<{ role: string; content: string; timestamp: string }[]> {
+    const res = await fetch(`${API_BASE}/api/v1/chat/history?session_id=${encodeURIComponent(sessionId)}`);
+    if (!res.ok) throw new Error('Failed to load chat history.');
+    const data = await res.json();
+    return data.history;
   }
 };

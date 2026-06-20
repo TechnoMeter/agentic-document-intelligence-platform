@@ -33,6 +33,7 @@ if USE_POSTGRES:
     def init_db():
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                # documents table (existing)
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS documents (
                         id SERIAL PRIMARY KEY,
@@ -44,7 +45,6 @@ if USE_POSTGRES:
                         owner_id TEXT NOT NULL DEFAULT 'default_session'
                     )
                 """)
-                # Check if owner_id column exists, if not add it
                 cur.execute("""
                     SELECT column_name FROM information_schema.columns 
                     WHERE table_name='documents' AND column_name='owner_id'
@@ -53,8 +53,21 @@ if USE_POSTGRES:
                     cur.execute("""
                         ALTER TABLE documents ADD COLUMN owner_id TEXT NOT NULL DEFAULT 'default_session'
                     """)
-                # Create index for performance
                 cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_owner_id ON documents(owner_id)")
+
+                # chat_history table (new)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS chat_history (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        session_id TEXT NOT NULL,
+                        role TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_chat_history_session ON chat_history(session_id)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_chat_history_created ON chat_history(created_at)")
+
             conn.commit()
 
 else:
@@ -72,6 +85,7 @@ else:
 
     def init_db():
         with get_db_connection() as conn:
+            # documents table (existing)
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS documents (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,12 +97,25 @@ else:
                     owner_id TEXT NOT NULL DEFAULT 'default_session'
                 )
             """)
-            # Try to add owner_id column if it doesn't exist
             try:
                 conn.execute("ALTER TABLE documents ADD COLUMN owner_id TEXT NOT NULL DEFAULT 'default_session'")
             except sqlite3.OperationalError:
-                pass  # Column already exists
+                pass
             conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_owner_id ON documents(owner_id)")
+
+            # chat_history table (new)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS chat_history (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_history_session ON chat_history(session_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_history_created ON chat_history(created_at)")
+
             conn.commit()
 
 # Initialize on import
