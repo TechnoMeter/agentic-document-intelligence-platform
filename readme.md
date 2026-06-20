@@ -27,6 +27,7 @@
 ---
 
 ![Main UI](docs/image1.png)
+![UI in Action](docs/image.png)
 
 
 ## 🌐 Live Demo & Hosting
