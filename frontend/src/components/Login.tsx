@@ -90,9 +90,10 @@ export function Login() {
             <Database className="w-8 h-8 text-white drop-shadow-md" />
           </div>
           <h1 className="text-2xl font-bold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">ShriRAGx</h1>
-          <div className="text-center text-blue-100/70">
+<div className="text-center text-blue-100/70">
   <p className="text-sm font-medium">Upload your files. Ask anything. Get clear answers – instantly.</p>
-  <p className="text-xs text-blue-100/50 mt-1">No setup, no coding – just your documents and our AI.</p>
+  <p className="text-xs text-blue-100/50 mt-1">Just your documents and our AI. It's that easy.</p>
+  
 </div>
 
         {/* ===== RECENT PROFILES – CENTERED, LARGER, GREEN GLOW ===== */}
