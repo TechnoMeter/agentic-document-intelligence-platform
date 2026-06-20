@@ -31,6 +31,7 @@ describe('App', () => {
       setView: vi.fn(),
       isMobileMenuOpen: false,
       setMobileMenuOpen: vi.fn(),
+      setSession: vi.fn(),
     });
     render(<App />);
     expect(screen.getByText('Login')).toBeInTheDocument();
@@ -40,10 +41,21 @@ describe('App', () => {
   it('renders main app when sessionId exists', () => {
     (useChatStore as any).mockReturnValue({
       sessionId: 'test-session',
+      username: 'TestUser',
       currentView: 'chat',
-      setView: vi.fn(),
+      thoughts: [],
+      messages: [],
+      hasDocuments: false,
       isMobileMenuOpen: false,
+      isMobileThoughtsOpen: false,
+      setView: vi.fn(),
       setMobileMenuOpen: vi.fn(),
+      setMobileThoughtsOpen: vi.fn(),
+      logout: vi.fn(),
+      setMessages: vi.fn(),
+      addMessage: vi.fn(),
+      setHasDocuments: vi.fn(),
+      setSession: vi.fn(),
     });
     render(<App />);
     expect(screen.getByText('ChatWindow')).toBeInTheDocument();
@@ -56,10 +68,21 @@ describe('App', () => {
     const mockSetView = vi.fn();
     (useChatStore as any).mockReturnValue({
       sessionId: 'test-session',
+      username: 'TestUser',
       currentView: 'chat',
-      setView: mockSetView,
+      thoughts: [],
+      messages: [],
+      hasDocuments: false,
       isMobileMenuOpen: false,
+      isMobileThoughtsOpen: false,
+      setView: mockSetView,
       setMobileMenuOpen: vi.fn(),
+      setMobileThoughtsOpen: vi.fn(),
+      logout: vi.fn(),
+      setMessages: vi.fn(),
+      addMessage: vi.fn(),
+      setHasDocuments: vi.fn(),
+      setSession: vi.fn(),
     });
     render(<App />);
 

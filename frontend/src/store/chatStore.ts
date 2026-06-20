@@ -17,16 +17,20 @@ interface ChatState {
   currentView: ViewType;
   pendingPrompt: string | null;
   isMobileMenuOpen: boolean;
+  isMobileThoughtsOpen: boolean;
   sessionId: string | null;
-  username: string | null;           // NEW: store the display name
+  username: string | null;
+  hasDocuments: boolean | null;      // NEW: Tracks if the user has uploaded anything
 
   // Actions
   setLoading: (loading: boolean) => void;
   setView: (view: ViewType) => void;
   setPendingPrompt: (prompt: string | null) => void;
   setMobileMenuOpen: (open: boolean) => void;
-  setSession: (username: string, sessionId: string) => void;   // NEW: sets both
-  logout: () => void;                // NEW: clears session
+  setMobileThoughtsOpen: (open: boolean) => void;
+  setSession: (username: string, sessionId: string) => void;
+  setHasDocuments: (has: boolean) => void; // NEW: Action to update doc status
+  logout: () => void;
   addMessage: (message: Omit<Message, 'id'>) => void;
   updateLastMessageToken: (token: string, isStreaming?: boolean) => void;
   addThought: (thought: string) => void;
@@ -42,24 +46,27 @@ export const useChatStore = create<ChatState>((set) => ({
   currentView: 'chat',
   pendingPrompt: null,
   isMobileMenuOpen: false,
+  isMobileThoughtsOpen: false,
   sessionId: null,
-  username: null,                     // NEW
+  username: null,
+  hasDocuments: null,                 // Default to null until fetched
 
   setLoading: (loading) => set({ isLoading: loading }),
-  setView: (view) => set({ currentView: view, isMobileMenuOpen: false }),
+  setView: (view) => set({ currentView: view, isMobileMenuOpen: false, isMobileThoughtsOpen: false }),
   setPendingPrompt: (prompt) => set({ pendingPrompt: prompt }),
   setMobileMenuOpen: (open) => set({ isMobileMenuOpen: open }),
+  setMobileThoughtsOpen: (open) => set({ isMobileThoughtsOpen: open }),
+  
+  setHasDocuments: (has) => set({ hasDocuments: has }),
 
-  // NEW: set both username and sessionId, and persist to localStorage
   setSession: (username, sessionId) => {
     localStorage.setItem('current_session', JSON.stringify({ username, sessionId }));
     set({ username, sessionId });
   },
 
-  // NEW: clear session from store and localStorage (but keep profiles)
   logout: () => {
     localStorage.removeItem('current_session');
-    set({ username: null, sessionId: null, messages: [], thoughts: [] });
+    set({ username: null, sessionId: null, messages: [], thoughts: [], hasDocuments: null });
   },
 
   addMessage: (msg) => set((state) => ({

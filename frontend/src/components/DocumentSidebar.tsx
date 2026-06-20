@@ -7,7 +7,9 @@ import { cn } from '@/lib/utils';
 export function DocumentSidebar() {
   const [status, setStatus] = useState<'idle' | 'uploading' | 'success'>('idle');
   const [fileName, setFileName] = useState<string>('');
+  
   const sessionId = useChatStore((state) => state.sessionId);
+  const setHasDocuments = useChatStore((state) => state.setHasDocuments); // NEW
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -18,6 +20,8 @@ export function DocumentSidebar() {
     try {
       await api.uploadFile(file, sessionId);
       setStatus('success');
+      setHasDocuments(true); // Tell the app a document is ready!
+      
       setTimeout(() => {
         setStatus('idle');
         setFileName('');
@@ -33,11 +37,11 @@ export function DocumentSidebar() {
     <div className="p-4 space-y-4">
       <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Ingestion Channel</h3>
       <label className={cn(
-        "flex flex-col items-center justify-center w-full h-36 border-2 border-dashed rounded-xl cursor-pointer transition-all p-4 text-center",
+        "flex flex-col items-center justify-center w-full h-36 border-2 border-dashed rounded-xl cursor-pointer transition-all p-4 text-center group",
         status === 'idle' ? "border-slate-700 hover:bg-slate-800/40" : "border-blue-500 bg-blue-950/20"
       )}>
         <div className="flex flex-col items-center justify-center">
-          {status === 'idle' && <FileUp className="w-7 h-7 mb-2 text-slate-400" />}
+          {status === 'idle' && <FileUp className="w-7 h-7 mb-2 text-slate-400 group-hover:text-blue-400 transition-colors" />}
           {status === 'uploading' && <Loader2 className="w-7 h-7 mb-2 text-blue-500 animate-spin" />}
           {status === 'success' && <CheckCircle2 className="w-7 h-7 mb-2 text-emerald-500" />}
           

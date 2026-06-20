@@ -23,6 +23,7 @@ export function DocumentLibrary() {
   const setView = useChatStore((state) => state.setView);
   const setPendingPrompt = useChatStore((state) => state.setPendingPrompt);
   const sessionId = useChatStore((state) => state.sessionId);
+  const setHasDocuments = useChatStore((state) => state.setHasDocuments); // NEW
 
   const fetchDocs = async () => {
     if (!sessionId) return;
@@ -30,6 +31,7 @@ export function DocumentLibrary() {
     try {
       const data = await api.getDocuments(sessionId);
       setDocuments(data.documents);
+      setHasDocuments(data.documents.length > 0); // Sync state on refresh
     } catch (err) {
       console.error(err);
     } finally {
@@ -54,11 +56,18 @@ export function DocumentLibrary() {
   const handleDelete = async (id: number, filename: string) => {
     if (!sessionId) return;
     if (!confirm(`Are you sure you want to delete ${filename} from the vector store?`)) return;
-    setDocuments(docs => docs.filter(d => d.id !== id));
+    
+    // Optimistic delete
+    setDocuments(docs => {
+      const remaining = docs.filter(d => d.id !== id);
+      setHasDocuments(remaining.length > 0);
+      return remaining;
+    });
+
     try {
       await api.deleteDocument(id, filename, sessionId);
     } catch (err) {
-      fetchDocs();
+      fetchDocs(); // revert on fail
     }
   };
 

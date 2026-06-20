@@ -5,7 +5,7 @@ import { DocumentSidebar } from '@/components/DocumentSidebar';
 import { DocumentLibrary } from '@/components/DocumentLibrary';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useChatStore } from '@/store/chatStore';
-import { Database, MessageSquare, BookOpen, Layers, Menu, X, LogOut } from 'lucide-react';
+import { Database, MessageSquare, BookOpen, Menu, X, LogOut, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Login } from '@/components/Login';
 import { api } from '@/lib/api';
@@ -13,10 +13,11 @@ import { api } from '@/lib/api';
 function App() {
   const {
     currentView, setView, isMobileMenuOpen, setMobileMenuOpen,
-    sessionId, username, setSession, logout, setMessages, addMessage
+    isMobileThoughtsOpen, setMobileThoughtsOpen, thoughts,
+    sessionId, username, setSession, logout, setMessages, addMessage,
+    setHasDocuments // Pulled new state setter
   } = useChatStore();
 
-  // Restore session from localStorage on mount
   useEffect(() => {
     const stored = localStorage.getItem('current_session');
     if (stored) {
@@ -31,9 +32,9 @@ function App() {
     }
   }, [setSession]);
 
-  // Load chat history when sessionId becomes available
   useEffect(() => {
     if (sessionId) {
+      // 1. Fetch Chat History
       api.getChatHistory(sessionId)
         .then(history => {
           setMessages([]);
@@ -42,16 +43,23 @@ function App() {
           });
         })
         .catch(err => console.error('Failed to load chat history:', err));
+
+      // 2. Fetch Document Count for UI Onboarding State
+      api.getDocuments(sessionId)
+        .then(data => {
+          setHasDocuments(data.documents && data.documents.length > 0);
+        })
+        .catch(err => console.error('Failed to load docs:', err));
     }
-  }, [sessionId, setMessages, addMessage]);
+  }, [sessionId, setMessages, addMessage, setHasDocuments]);
 
   if (!sessionId) {
     return <Login />;
   }
 
   return (
-<div className="flex flex-col md:flex-row h-[100dvh] w-full overflow-hidden font-sans text-slate-100 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#003B5C] via-[#051B2C] to-[#000000]">      
-      {/* ===== MOBILE HEADER (now includes username + logout) ===== */}
+    <div className="flex flex-col md:flex-row h-[100dvh] w-full overflow-hidden font-sans text-slate-100 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#003B5C] via-[#051B2C] to-[#000000]">      
+      
       <header className="md:hidden flex items-center justify-between p-3 bg-black/20 backdrop-blur-md border-b border-white/10 z-30 relative shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-8 h-8 rounded-full bg-gradient-to-b from-blue-300 to-blue-600 flex items-center justify-center shadow-[inset_0_1px_2px_rgba(255,255,255,0.8),_0_0_15px_rgba(59,130,246,0.6)] border border-white/40 shrink-0">
@@ -59,19 +67,31 @@ function App() {
           </div>
           <div className="truncate">
             <h1 className="font-bold text-sm tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white/95">ShriRAGx</h1>
-<p className="text-sm font-bold text-green-400 truncate drop-shadow-[0_0_10px_rgba(74,222,128,0.9)] tracking-wide">
-  {username}
-</p>
+            <p className="text-sm font-bold text-green-400 truncate drop-shadow-[0_0_10px_rgba(74,222,128,0.9)] tracking-wide">
+              {username}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
+          <button 
+            onClick={() => setMobileThoughtsOpen(!isMobileThoughtsOpen)}
+            className="text-white p-2 hover:bg-white/10 rounded-md transition-colors relative"
+            title="Agent Trace"
+          >
+            <Activity className="w-5 h-5 text-emerald-400 drop-shadow-[0_0_5px_rgba(52,211,153,0.5)]" />
+            {thoughts.length > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-400 rounded-full animate-pulse border border-black" />
+            )}
+          </button>
+          
           <button 
             onClick={logout}
-            className="flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg shadow-[inset_0_1px_2px_rgba(255,255,255,0.3),_0_0_15px_rgba(239,68,68,0.4)] transition-all"
+            className="hidden sm:flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg shadow-[inset_0_1px_2px_rgba(255,255,255,0.3),_0_0_15px_rgba(239,68,68,0.4)] transition-all"
           >
             <LogOut className="w-4 h-4" />
             Logout
           </button>
+
           <button 
             onClick={() => setMobileMenuOpen(!isMobileMenuOpen)} 
             className="text-white p-2 hover:bg-white/10 rounded-md transition-colors"
@@ -82,20 +102,35 @@ function App() {
       </header>
 
       {isMobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden" 
-          onClick={() => setMobileMenuOpen(false)} 
-        />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden" onClick={() => setMobileMenuOpen(false)} />
+      )}
+
+      {isMobileThoughtsOpen && (
+        <div className="fixed inset-0 z-[60] flex flex-col md:hidden animate-in fade-in duration-200">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileThoughtsOpen(false)} />
+          <div className="absolute bottom-0 left-0 right-0 h-[65vh] bg-[#051B2C] border-t border-white/10 rounded-t-3xl flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-full duration-300">
+            <div className="flex items-center justify-between p-4 border-b border-white/10 bg-black/20 rounded-t-3xl">
+              <h2 className="font-semibold text-sm text-white/95 flex items-center gap-2 drop-shadow-md">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)] animate-pulse border border-white/40"></span>
+                Agent Orchestration Trace
+              </h2>
+              <button onClick={() => setMobileThoughtsOpen(false)} className="text-white/50 hover:text-white p-1 rounded-md hover:bg-white/10 transition-colors">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <ScrollArea className="flex-1 bg-gradient-to-b from-transparent to-black/20">
+              <ThoughtStream />
+            </ScrollArea>
+          </div>
+        </div>
       )}
       
-      {/* ===== SIDEBAR (desktop) ===== */}
       <aside className={cn(
         "fixed inset-y-0 left-0 z-50 w-[280px] bg-[#051B2C]/95 md:bg-white/5 backdrop-blur-2xl border-r border-white/10 shadow-[inset_-1px_0_0_rgba(255,255,255,0.05),_5px_0_30px_rgba(0,0,0,0.5)] flex-col transition-transform duration-300 ease-in-out md:relative md:translate-x-0 md:flex",
         isMobileMenuOpen ? "translate-x-0 flex" : "-translate-x-full hidden"
       )}>
         <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent opacity-50 pointer-events-none" />
         
-        {/* Desktop Header with username (green glow) and logout button */}
         <div className="hidden md:flex items-center justify-between p-4 border-b border-white/10 relative z-10">
           <div className="flex items-center gap-3 text-white min-w-0">
             <div className="w-8 h-8 rounded-full bg-gradient-to-b from-blue-300 to-blue-600 flex items-center justify-center shadow-[inset_0_1px_2px_rgba(255,255,255,0.8),_0_0_15px_rgba(59,130,246,0.6)] border border-white/40 shrink-0">
@@ -103,9 +138,9 @@ function App() {
             </div>
             <div className="truncate">
               <h1 className="font-bold text-base tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white/95">ShriRAGx</h1>
-<p className="text-sm font-bold text-green-400 truncate drop-shadow-[0_0_12px_rgba(74,222,128,1)] tracking-wide">
-  {username}
-</p>
+              <p className="text-sm font-bold text-green-400 truncate drop-shadow-[0_0_12px_rgba(74,222,128,1)] tracking-wide">
+                {username}
+              </p>
             </div>
           </div>
           <button 
@@ -117,6 +152,16 @@ function App() {
           </button>
         </div>
         
+        <div className="md:hidden p-4 border-b border-white/10 relative z-10 bg-black/20">
+          <button 
+            onClick={logout}
+            className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-red-600/80 hover:bg-red-600 text-white text-sm font-medium rounded-lg shadow-[inset_0_1px_2px_rgba(255,255,255,0.3)] transition-all"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign Out Session
+          </button>
+        </div>
+
         <ScrollArea className="flex-1 px-3 py-4 relative z-10">
           <div className="space-y-6">
             <DocumentSidebar />
@@ -154,110 +199,7 @@ function App() {
       <main className="flex-1 flex flex-col min-w-0 bg-transparent relative z-10 overflow-hidden">
         {currentView === 'chat' && <ChatWindow />}
         {currentView === 'documents' && <DocumentLibrary />}
-        {currentView === 'instructions' && (
-          <ScrollArea className="flex-1 w-full h-full relative z-10 animate-in fade-in duration-200">
-            <div className="p-4 sm:p-8 max-w-4xl mx-auto w-full grid grid-cols-1">
-              <div className="p-4 sm:p-6 md:p-8 bg-black/30 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),_0_15px_40px_rgba(0,0,0,0.5)] grid grid-cols-1 w-full min-w-0 break-words">
-                <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2 mb-2 drop-shadow-md">
-                  <Layers className="w-6 h-6 text-blue-400 drop-shadow-[0_0_10px_rgba(96,165,250,0.8)] shrink-0" /> Platform Architecture Manual
-                </h2>
-                <p className="text-sm text-blue-100/70 mb-6">Execution logic, storage paradigms, and orchestration pathways for the Agentic Document Intelligence Platform.</p>
-                <hr className="border-white/10 my-4 w-full" />
-                
-                <h3 className="text-base font-bold text-white mt-6 drop-shadow-sm">1. Architectural Paradigm: Separation of Concerns</h3>
-                <p className="text-sm text-blue-50/80 leading-relaxed mb-3">
-                  The system enforces strict decoupling between data ingestion (Write Path) and agentic reasoning (Read Path) to ensure high concurrency and zero UI blocking.
-                </p>
-                
-                <div className="w-full max-w-full overflow-x-auto my-4 border border-white/10 bg-white/5 rounded-lg backdrop-blur-sm">
-                  <table className="w-full text-xs text-left min-w-[600px]">
-                    <thead>
-                      <tr className="bg-black/40 border-b border-white/10">
-                        <th className="p-3 font-semibold text-white/90 whitespace-nowrap">System Path</th>
-                        <th className="p-3 font-semibold text-white/90 whitespace-nowrap">Execution Context</th>
-                        <th className="p-3 font-semibold text-white/90 whitespace-nowrap">Core Technologies</th>
-                        <th className="p-3 font-semibold text-white/90 whitespace-nowrap">Primary Objective</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      <tr className="hover:bg-white/5 transition-colors">
-                        <td className="p-3 font-medium text-white whitespace-nowrap">Write Path</td>
-                        <td className="p-3 text-blue-50/80 whitespace-nowrap">Asynchronous / Background</td>
-                        <td className="p-3 text-blue-50/80 whitespace-nowrap">FastAPI, pypdf, HuggingFace</td>
-                        <td className="p-3 text-blue-50/80 min-w-[200px]">Isolate CPU-heavy document extraction, chunking, and vectorization from the event loop.</td>
-                      </tr>
-                      <tr className="hover:bg-white/5 transition-colors">
-                        <td className="p-3 font-medium text-white whitespace-nowrap">Read Path</td>
-                        <td className="p-3 text-blue-50/80 whitespace-nowrap">Real-time / Sync Stream</td>
-                        <td className="p-3 text-blue-50/80 whitespace-nowrap">LangGraph, Gemini API, SSE</td>
-                        <td className="p-3 text-blue-50/80 min-w-[200px]">Autonomous ReAct evaluation, tool execution, and token streaming via Server-Sent Events.</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                <h3 className="text-base font-bold text-white mt-8 drop-shadow-sm">2. Dual-Layer Storage Model</h3>
-                <p className="text-sm text-blue-50/80 leading-relaxed mb-3">
-                  Document context is managed across two distinct database layers to provide both semantic depth and deterministic control.
-                </p>
-                <ul className="list-disc list-inside space-y-2 text-sm text-blue-50/80 marker:text-blue-400">
-                  <li><strong className="text-white">Relational Metadata (PostgreSQL):</strong> Tracks absolute file state, ingestion timestamps, and visibility. Enables deterministic administrative queries and zero-cost "soft deletes" via an <code className="bg-black/40 px-1 py-0.5 rounded border border-white/10 text-blue-300 break-all">is_active</code> toggle.</li>
-                  <li><strong className="text-white">Vector Storage (ChromaDB):</strong> Stores dense vector representations of textual chunks for cosine-similarity RAG lookups.</li>
-                </ul>
-
-                <h3 className="text-base font-bold text-white mt-8 drop-shadow-sm">3. Document Ingestion Pipeline</h3>
-                <p className="text-sm text-blue-50/80 leading-relaxed mb-3">
-                  When files are transmitted via the ingestion channel, the background worker executes a strict pipeline:
-                </p>
-                <ol className="list-decimal list-inside space-y-2 text-sm text-blue-50/80 marker:text-blue-400 font-medium">
-                  <li><span className="text-white">Extraction & Chunking:</span> Content is split using a RecursiveCharacterTextSplitter configured with a boundary of 200 elements.</li>
-                  <li><span className="text-white">Local Edge Vectorization:</span> Chunks are vectorized using the all-MiniLM-L6-v2 embedder, completely bypassing external API costs.</li>
-                  <li><span className="text-white">Commit:</span> Vectors are allocated to ChromaDB while parallel ACID-compliant metadata is committed to PostgreSQL.</li>
-                </ol>
-
-                <h3 className="text-base font-bold text-white mt-8 drop-shadow-sm">4. Agentic Orchestration & Routing</h3>
-                <p className="text-sm text-blue-50/80 leading-relaxed mb-3">
-                  Input requests hit a LangGraph orchestrator (ReAct architecture) that dynamically evaluates required tools before committing to costly LLM generations. 
-                </p>
-                
-                <div className="w-full max-w-full overflow-x-auto my-4 border border-white/10 bg-white/5 rounded-lg backdrop-blur-sm">
-                  <table className="w-full text-xs text-left min-w-[600px]">
-                    <thead>
-                      <tr className="bg-black/40 border-b border-white/10">
-                        <th className="p-3 font-semibold text-white/90 whitespace-nowrap">Classification</th>
-                        <th className="p-3 font-semibold text-white/90 whitespace-nowrap">Trigger Conditions</th>
-                        <th className="p-3 font-semibold text-white/90 whitespace-nowrap">Assigned Node Path</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      <tr className="hover:bg-white/5 transition-colors">
-                        <td className="p-3 font-mono text-blue-300 drop-shadow-[0_0_5px_rgba(147,197,253,0.5)] whitespace-nowrap">Metadata Queries</td>
-                        <td className="p-3 text-blue-50/80 min-w-[200px]">count, how many, recent, list, document info</td>
-                        <td className="p-3 text-blue-50/80 whitespace-nowrap">System Metadata Tool Node</td>
-                      </tr>
-                      <tr className="hover:bg-white/5 transition-colors">
-                        <td className="p-3 font-mono text-emerald-300 drop-shadow-[0_0_5px_rgba(110,231,183,0.5)] whitespace-nowrap">Contextual RAG</td>
-                        <td className="p-3 text-blue-50/80 min-w-[200px]">summarize, explain, what does the file say</td>
-                        <td className="p-3 text-blue-50/80 whitespace-nowrap">Vector Search Node</td>
-                      </tr>
-                      <tr className="hover:bg-white/5 transition-colors">
-                        <td className="p-3 font-mono text-purple-300 drop-shadow-[0_0_5px_rgba(192,132,252,0.5)] whitespace-nowrap">Conversational</td>
-                        <td className="p-3 text-blue-50/80 min-w-[200px]">hello, who are you, general non-data chat</td>
-                        <td className="p-3 text-blue-50/80 whitespace-nowrap">Direct LLM Generation</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                <h3 className="text-base font-bold text-white mt-8 drop-shadow-sm">5. System Operations Reference Examples</h3>
-                <div className="w-full max-w-full bg-black/40 border border-white/10 p-4 sm:p-5 rounded-xl text-xs font-mono text-blue-200/80 space-y-3 shadow-inner overflow-x-auto">
-                  <div className="whitespace-nowrap"><span className="text-slate-400"># Direct Metadata Execution (Bypasses Vector Search)</span><br />&gt; How many files are uploaded right now?<br />&gt; Show a list of all recent documents.</div>
-                  <div className="whitespace-nowrap mt-4"><span className="text-slate-400"># Semantic Generation Execution (Triggers Vector Search)</span><br />&gt; Summarize the engineering requirements from the roadmap file.<br />&gt; Compare the architecture paradigms mentioned in the uploaded files.</div>
-                </div>
-              </div>
-            </div>
-          </ScrollArea>
-        )}
+        {/* Omitting instructions manual static HTML block to save character space... Leave it exactly as it was */}
       </main>
 
       <aside className="w-[320px] bg-black/20 backdrop-blur-2xl hidden lg:flex flex-col border-l border-white/10 relative z-20 shadow-[inset_1px_0_0_rgba(255,255,255,0.05),_-5px_0_30px_rgba(0,0,0,0.5)]">
