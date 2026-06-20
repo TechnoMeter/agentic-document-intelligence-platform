@@ -38,3 +38,4 @@ jobs:
             
             # 4. Reclaim storage space
             sudo docker image prune -f
+            
