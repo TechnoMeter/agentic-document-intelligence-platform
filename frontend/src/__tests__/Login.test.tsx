@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Login } from '@/components/Login';
 import { useChatStore } from '@/store/chatStore';
@@ -22,13 +22,13 @@ describe('Login', () => {
     render(<Login />);
     expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /start session/i })).toBeInTheDocument();
   });
 
   it('shows error if fields are empty', async () => {
     render(<Login />);
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: /sign in/i }));
+    await user.click(screen.getByRole('button', { name: /start session/i }));
 
     expect(await screen.findByText(/both fields are required/i)).toBeInTheDocument();
   });
@@ -38,7 +38,7 @@ describe('Login', () => {
     const user = userEvent.setup();
     await user.type(screen.getByLabelText(/username/i), 'ab');
     await user.type(screen.getByLabelText(/password/i), '123456');
-    await user.click(screen.getByRole('button', { name: /sign in/i }));
+    await user.click(screen.getByRole('button', { name: /start session/i }));
 
     expect(await screen.findByText(/must be at least 3 characters/i)).toBeInTheDocument();
   });

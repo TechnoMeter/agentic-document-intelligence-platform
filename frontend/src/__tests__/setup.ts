@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import { vi, afterEach } from 'vitest';
 
 // This mock is used by the Login component for hashing.
 // The hashing test is skipped, but we keep the mock for completeness.
