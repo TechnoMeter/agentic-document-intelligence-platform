@@ -50,8 +50,7 @@ function App() {
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden font-sans text-slate-100 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#003B5C] via-[#051B2C] to-[#000000]">
-      
+<div className="flex flex-col md:flex-row h-[100dvh] w-full overflow-hidden font-sans text-slate-100 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#003B5C] via-[#051B2C] to-[#000000]">      
       {/* ===== MOBILE HEADER (now includes username + logout) ===== */}
       <header className="md:hidden flex items-center justify-between p-3 bg-black/20 backdrop-blur-md border-b border-white/10 z-30 relative shrink-0">
         <div className="flex items-center gap-2 min-w-0">
@@ -60,9 +59,9 @@ function App() {
           </div>
           <div className="truncate">
             <h1 className="font-bold text-sm tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white/95">ShriRAGx</h1>
-            <p className="text-xs text-blue-200/60 truncate drop-shadow-[0_0_8px_rgba(34,197,94,0.5)]">
-              {username}
-            </p>
+<p className="text-sm font-bold text-green-400 truncate drop-shadow-[0_0_10px_rgba(74,222,128,0.9)] tracking-wide">
+  {username}
+</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -104,9 +103,9 @@ function App() {
             </div>
             <div className="truncate">
               <h1 className="font-bold text-base tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white/95">ShriRAGx</h1>
-              <p className="text-xs text-blue-200/60 truncate drop-shadow-[0_0_10px_rgba(34,197,94,0.7)]">
-                {username}
-              </p>
+<p className="text-sm font-bold text-green-400 truncate drop-shadow-[0_0_12px_rgba(74,222,128,1)] tracking-wide">
+  {username}
+</p>
             </div>
           </div>
           <button 

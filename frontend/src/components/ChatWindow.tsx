@@ -85,7 +85,7 @@ export function ChatWindow() {
             </p>
           </div>
         ) : (
-          <div className="space-y-6 pb-24">
+          <div className="space-y-6 pb-32 sm:pb-36">
             {messages.map((msg) => (
               <div
                 key={msg.id}
@@ -131,7 +131,7 @@ export function ChatWindow() {
       </ScrollArea>
 
       {/* Input Area (unchanged) */}
-      <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-16 pointer-events-none">
+      <div className="absolute bottom-0 left-0 right-0 p-3 pb-5 sm:p-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-16 pointer-events-none z-20">
         <div className="max-w-4xl mx-auto flex gap-2 sm:gap-3 items-center bg-white/10 backdrop-blur-3xl border border-white/20 p-2 sm:p-2.5 rounded-full shadow-[0_10px_40px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.3)] focus-within:bg-white/20 focus-within:border-blue-400/50 transition-all pointer-events-auto">
           <Input
             value={input}
