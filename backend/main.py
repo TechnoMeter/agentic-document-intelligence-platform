@@ -180,18 +180,32 @@ async def chat_endpoint(request: ChatRequest):
         
         final_state = await app_agent.ainvoke(initial_state, config=config)
         agent_response = final_state["messages"][-1].content
-        # Save both user and assistant for this non‑streaming endpoint too
-        save_message(request.session_id, "user", request.message)
-        save_message(request.session_id, "assistant", agent_response)
+        
+        # Save chat (catch errors but don't fail)
+        try:
+            save_message(request.session_id, "user", request.message)
+            save_message(request.session_id, "assistant", agent_response)
+        except Exception as e:
+            logger.error(f"Failed to save chat history: {e}", exc_info=True)
+        
         return {"reply": agent_response}
     except Exception as e:
         logger.error(f"Chat error: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to process agent request.")
+        # Return detailed error (for debugging; you may want to hide in production)
+        raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
 
 @app.post("/api/v1/chat/stream")
 async def chat_stream_endpoint(request: ChatRequest):
+    async def safe_stream():
+        try:
+            async for chunk in stream_agent_response(request.message, request.session_id):
+                yield chunk
+        except Exception as e:
+            logger.error(f"Stream error: {e}", exc_info=True)
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+    
     return StreamingResponse(
-        stream_agent_response(request.message, request.session_id),
+        safe_stream(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
     )

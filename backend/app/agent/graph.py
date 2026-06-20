@@ -7,7 +7,6 @@ from langgraph.graph import StateGraph, END, add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.tools import tool
-from langchain.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
 from app.services.vector_store import get_vector_store
 from app.database import get_db_connection, USE_POSTGRES
@@ -35,88 +34,139 @@ llm = ChatGoogleGenerativeAI(
 @tool
 async def search_active_documents(query: str, config: RunnableConfig) -> str:
     """Search through the semantic contents of active uploaded documents."""
-    thread_id = config.get("configurable", {}).get("thread_id", "default_session")
+    # Safe config extraction
+    thread_id = config.get("configurable", {}).get("thread_id", "default_session") if config else "default_session"
 
     def get_active_filenames(owner_id):
-        with get_db_connection() as conn:
-            cur = conn.cursor()
-            if USE_POSTGRES:
-                cur.execute(
-                    "SELECT filename FROM documents WHERE is_active = true AND owner_id = %s",
-                    (owner_id,)
-                )
-            else:
-                cur.execute(
-                    "SELECT filename FROM documents WHERE is_active = 1 AND owner_id = ?",
-                    (owner_id,)
-                )
-            return [row[0] for row in cur.fetchall()]
+        try:
+            with get_db_connection() as conn:
+                cur = conn.cursor()
+                if USE_POSTGRES:
+                    cur.execute(
+                        "SELECT filename FROM documents WHERE is_active = true AND owner_id = %s",
+                        (owner_id,)
+                    )
+                else:
+                    cur.execute(
+                        "SELECT filename FROM documents WHERE is_active = 1 AND owner_id = ?",
+                        (owner_id,)
+                    )
+                return [row[0] for row in cur.fetchall()]
+        except Exception as e:
+            logger.error(f"DB error in get_active_filenames: {e}")
+            return []
 
-    active_filenames = get_active_filenames(thread_id)
+    try:
+        active_filenames = get_active_filenames(thread_id)
 
-    # If we got none, double‑check by counting active documents
-    if not active_filenames:
-        with get_db_connection() as conn:
-            cur = conn.cursor()
-            if USE_POSTGRES:
-                cur.execute(
-                    "SELECT COUNT(*) FROM documents WHERE is_active = true AND owner_id = %s",
-                    (thread_id,)
-                )
-            else:
-                cur.execute(
-                    "SELECT COUNT(*) FROM documents WHERE is_active = 1 AND owner_id = ?",
-                    (thread_id,)
-                )
-            count = cur.fetchone()[0]
+        # Retry logic: if count > 0 but filenames empty, wait and retry
+        if not active_filenames:
+            count = 0
+            try:
+                with get_db_connection() as conn:
+                    cur = conn.cursor()
+                    if USE_POSTGRES:
+                        cur.execute(
+                            "SELECT COUNT(*) FROM documents WHERE is_active = true AND owner_id = %s",
+                            (thread_id,)
+                        )
+                    else:
+                        cur.execute(
+                            "SELECT COUNT(*) FROM documents WHERE is_active = 1 AND owner_id = ?",
+                            (thread_id,)
+                        )
+                    count = cur.fetchone()[0]
+            except Exception as e:
+                logger.error(f"Count query error: {e}")
 
-        if count > 0:
-            logger.warning(
-                f"search_active_documents: count={count} but active_filenames empty. "
-                "Retrying after short delay."
+            if count > 0:
+                logger.warning(
+                    f"search_active_documents: count={count} but active_filenames empty. Retrying."
+                )
+                await asyncio.sleep(1.0)  # Increased from 0.2 to 1.0 for Azure
+                active_filenames = get_active_filenames(thread_id)
+                if active_filenames:
+                    logger.info(f"Retry succeeded, found {len(active_filenames)} active filenames.")
+                else:
+                    logger.warning(f"Retry still empty, but count={count}.")
+
+        if not active_filenames:
+            return (
+                "I cannot answer this because there are currently no active documents. "
+                "Please upload a file or toggle an existing one to 'Active'."
             )
-            await asyncio.sleep(0.2)  # small delay to allow commit visibility
-            active_filenames = get_active_filenames(thread_id)
-            if active_filenames:
-                logger.info(f"Retry succeeded, found {len(active_filenames)} active filenames.")
-            else:
-                logger.warning(f"Retry still empty, but count={count}.")
 
-    if not active_filenames:
-        return (
-            "I cannot answer this because there are currently no active documents. "
-            "Instruct the user to upload a file or toggle an existing one to 'Active'."
+        # Check for processing and failed files
+        processing_files = []
+        failed_files = []
+        try:
+            with get_db_connection() as conn:
+                cur = conn.cursor()
+                placeholders = ','.join(['%s'] * len(active_filenames)) if USE_POSTGRES else ','.join(['?'] * len(active_filenames))
+                query_str = f"SELECT filename, chunk_count FROM documents WHERE is_active = true AND owner_id = %s AND filename IN ({placeholders})"
+                params = [thread_id] + active_filenames if USE_POSTGRES else [thread_id] + active_filenames
+                cur.execute(query_str, params)
+                rows = cur.fetchall()
+                for filename, chunk_count in rows:
+                    if chunk_count == 0:
+                        processing_files.append(filename)
+                    elif chunk_count < 0:
+                        failed_files.append(filename)
+        except Exception as e:
+            logger.error(f"Processing check error: {e}")
+
+        # Prioritise failed files (they cannot be fixed by waiting)
+        if failed_files:
+            file_list = ", ".join(failed_files)
+            return (
+                f"⚠️ **The following document(s) could not be processed:** {file_list}. "
+                "They may be empty, contain only binary data, or use an unsupported format. "
+                "Please try uploading a different file with extractable text."
+            )
+
+        if processing_files:
+            file_list = ", ".join(processing_files)
+            return (
+                f"⏳ **Your document(s) are still being processed:** {file_list}. "
+                "Embedding generation is running in the background. "
+                "Please wait **5–10 seconds** and ask your question again. "
+                "You can also check the Document Library for the final chunk count."
+            )
+
+        # Vector search
+        vector_store = get_vector_store()
+        retriever = vector_store.as_retriever(
+            search_kwargs={
+                "k": 4,
+                "filter": {
+                    "$and": [
+                        {"source": {"$in": active_filenames}},
+                        {"owner_id": thread_id}
+                    ]
+                }
+            }
         )
 
-    vector_store = get_vector_store()
-    retriever = vector_store.as_retriever(
-        search_kwargs={
-            "k": 4,
-            "filter": {
-                "$and": [
-                    {"source": {"$in": active_filenames}},
-                    {"owner_id": thread_id}
-                ]
-            }
-        }
-    )
+        docs = await retriever.ainvoke(query)
 
-    docs = await retriever.ainvoke(query)
+        unique_content = set()
+        context_parts = []
+        for doc in docs:
+            clean_text = doc.page_content.strip()
+            if clean_text not in unique_content:
+                unique_content.add(clean_text)
+                context_parts.append(
+                    f"--- Excerpt from {doc.metadata.get('source', 'Unknown')} ---\n{clean_text}"
+                )
 
-    unique_content = set()
-    context_parts = []
-    for doc in docs:
-        clean_text = doc.page_content.strip()
-        if clean_text not in unique_content:
-            unique_content.add(clean_text)
-            context_parts.append(
-                f"--- Excerpt from {doc.metadata.get('source', 'Unknown')} ---\n{clean_text}"
-            )
+        if not context_parts:
+            return "No relevant information found in the active documents."
 
-    if not context_parts:
-        return "No relevant information found in the active documents."
+        return "\n\n".join(context_parts)
 
-    return "\n\n".join(context_parts)
+    except Exception as e:
+        logger.error(f"search_active_documents error: {e}", exc_info=True)
+        return f"An error occurred while searching your documents. Please try again in a few moments."
 
 tools = [search_active_documents, get_document_count, list_recent_documents, get_document_info]
 llm_with_tools = llm.bind_tools(tools)
@@ -135,22 +185,15 @@ Do not say you are an AI model, an autonomous agent, or anything similar. Do not
 You have access to tools to search document contents and retrieve system metadata. Always use the provided tools to answer questions about uploaded files. Synthesize the information cleanly using standard Markdown formatting. Do not hallucinate data."""
 
 async def agent_node(state: AgentState) -> dict:
-    # Dynamically prepend the system prompt before invoking the LLM.
-    # This guarantees the SystemMessage is always at messages[0] so the 
-    # LangChain Gemini adapter maps it to the official system_instruction API payload.
-    # We do NOT return the SystemMessage in the output dictionary to prevent memory pollution.
     messages = [SystemMessage(content=SYSTEM_PROMPT)] + list(state["messages"])
-    
     response = await llm_with_tools.ainvoke(messages)
     return {"messages": [response]}
 
 workflow = StateGraph(AgentState)
 workflow.add_node("agent", agent_node)
-
 tool_node = ToolNode(tools)
 workflow.add_node("tools", tool_node)
 
-# Route directly to the agent node
 workflow.set_entry_point("agent")
 workflow.add_conditional_edges("agent", tools_condition)
 workflow.add_edge("tools", "agent")

@@ -16,10 +16,9 @@ def test_chunking_boundaries(processor):
 
 @pytest.mark.asyncio
 async def test_process_and_store_error_handling(processor):
-    with patch(
-        'app.services.vector_store.Chroma.add_texts',
-        side_effect=Exception("ChromaDB Write Failure")
-    ):
+    with patch.object(processor, '_insert_metadata', return_value=1), \
+         patch.object(processor, '_update_chunk_count'), \
+         patch('app.services.vector_store.Chroma.add_texts', side_effect=Exception("ChromaDB Write Failure")):
         with pytest.raises(Exception, match="ChromaDB Write Failure"):
             await processor.process_and_store("test.txt", b"Mock content", "owner123")
 
@@ -37,8 +36,9 @@ def test_metadata_includes_owner_id(processor):
 
 def test_concurrent_upload_race_condition(processor):
     """Simulate two users uploading the same filename; ensure metadata is isolated."""
-    with patch.object(processor, '_insert_metadata') as mock_insert, \
-         patch.object(processor, '_split_and_embed') as mock_split:
+    with patch.object(processor, '_insert_metadata', return_value=1) as mock_insert, \
+         patch.object(processor, '_split_and_embed', return_value=5) as mock_split, \
+         patch.object(processor, '_update_chunk_count') as mock_update:
         async def run_concurrent():
             await asyncio.gather(
                 processor.process_and_store("common.txt", b"content1", "ownerA"),
@@ -48,28 +48,37 @@ def test_concurrent_upload_race_condition(processor):
 
         calls = mock_insert.call_args_list
         assert len(calls) == 2
-        owners = {call[0][3] for call in calls}
+        owners = {call[0][3] for call in calls}  # owner_id is 4th positional arg
         assert owners == {"ownerA", "ownerB"}
+        assert mock_split.call_count == 2
+        assert mock_update.call_count == 2  # once per upload
 
 def test_large_file_and_edge_cases(processor):
     """Test empty file, binary file, and huge content handling."""
     # Empty file
-    text_empty = ""
-    with patch.object(processor, '_extract_text', return_value=text_empty):
-        with patch.object(processor, '_insert_metadata') as mock_insert:
-            asyncio.run(processor.process_and_store("empty.txt", b"", "ownerA"))
-            mock_insert.assert_not_called()
+    with patch.object(processor, '_extract_text', return_value=""), \
+         patch.object(processor, '_insert_metadata', return_value=10) as mock_insert, \
+         patch.object(processor, '_update_chunk_count') as mock_update:
+        asyncio.run(processor.process_and_store("empty.txt", b"", "ownerA"))
+        mock_insert.assert_called_once_with("empty.txt", "txt", 0, "ownerA")
+        mock_update.assert_called_once_with(10, -1)
 
-    # Binary-only file (simulate extraction returning no valid text)
-    with patch.object(processor, '_extract_text', return_value="\x00\x01\x02"):
-        with patch.object(processor.splitter, 'split_text', return_value=[]):
-            with patch.object(processor, '_insert_metadata') as mock_insert:
-                asyncio.run(processor.process_and_store("binary.bin", b"\x00\x01", "ownerA"))
-                mock_insert.assert_called_once_with("binary.bin", "bin", 0, "ownerA")
+    # Binary-only file (no readable text – strip returns '')
+    with patch.object(processor, '_extract_text', return_value="   "), \
+         patch.object(processor, '_insert_metadata', return_value=20) as mock_insert, \
+         patch.object(processor, '_update_chunk_count') as mock_update:
+        asyncio.run(processor.process_and_store("binary.bin", b"\x00\x01", "ownerA"))
+        mock_insert.assert_called_once_with("binary.bin", "bin", 0, "ownerA")
+        mock_update.assert_called_once_with(20, -1)
 
-    # Huge content
+    # Huge content (should succeed)
     huge_text = "A " * 10000
-    with patch.object(processor.splitter, 'split_text', return_value=["chunk1", "chunk2"]):
-        with patch.object(processor.vector_store, 'add_texts') as mock_add:
-            asyncio.run(processor.process_and_store("huge.txt", huge_text.encode(), "ownerA"))
-            mock_add.assert_called_once()
+    with patch.object(processor, '_extract_text', return_value=huge_text), \
+         patch.object(processor.splitter, 'split_text', return_value=["chunk1", "chunk2"]), \
+         patch.object(processor.vector_store, 'add_texts') as mock_add, \
+         patch.object(processor, '_insert_metadata', return_value=30) as mock_insert, \
+         patch.object(processor, '_update_chunk_count') as mock_update:
+        asyncio.run(processor.process_and_store("huge.txt", huge_text.encode(), "ownerA"))
+        mock_add.assert_called_once()
+        mock_insert.assert_called_once_with("huge.txt", "txt", 0, "ownerA")
+        mock_update.assert_called_once_with(30, 2)

@@ -119,36 +119,58 @@ class DocumentProcessor:
         self.vector_store.add_texts(texts=chunks, metadatas=metadatas, ids=ids)
         return len(chunks)
 
+    def _insert_metadata(self, filename: str, file_type: str, chunk_count: int, owner_id: str) -> int:
+        with get_db_connection() as conn:
+            if USE_POSTGRES:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO documents (filename, file_type, chunk_count, owner_id) VALUES (%s, %s, %s, %s) RETURNING id",
+                        (filename, file_type, chunk_count, owner_id)
+                    )
+                    doc_id = cur.fetchone()[0]
+            else:
+                cur = conn.execute(
+                    "INSERT INTO documents (filename, file_type, chunk_count, owner_id) VALUES (?, ?, ?, ?)",
+                    (filename, file_type, chunk_count, owner_id)
+                )
+                doc_id = cur.lastrowid
+            conn.commit()
+            return doc_id
+
+    def _update_chunk_count(self, doc_id: int, chunk_count: int):
+        with get_db_connection() as conn:
+            if USE_POSTGRES:
+                with conn.cursor() as cur:
+                    cur.execute("UPDATE documents SET chunk_count = %s WHERE id = %s", (chunk_count, doc_id))
+            else:
+                conn.execute("UPDATE documents SET chunk_count = ? WHERE id = ?", (chunk_count, doc_id))
+            conn.commit()
+
     async def process_and_store(self, filename: str, content: bytes, owner_id: str) -> None:
         logger.info(f"Starting async ingestion for {filename} for owner {owner_id}")
         try:
+            file_type = filename.split('.')[-1].lower()
+            # 1. Insert metadata immediately with chunk_count=0
+            doc_id = await asyncio.to_thread(self._insert_metadata, filename, file_type, 0, owner_id)
+            logger.info(f"Metadata inserted for {filename} (id: {doc_id})")
+
+            # 2. Extract text
             text_content = await asyncio.to_thread(self._extract_text, content, filename)
 
             if not text_content.strip():
                 logger.warning(f"No extractable text found in {filename}.")
+                await asyncio.to_thread(self._update_chunk_count, doc_id, -1)
                 return
 
+            # 3. Split and embed
             chunk_count = await asyncio.to_thread(self._split_and_embed, text_content, filename, owner_id)
 
-            file_type = filename.split('.')[-1].lower()
-            await asyncio.to_thread(self._insert_metadata, filename, file_type, chunk_count, owner_id)
+            # 4. Update chunk count
+            if chunk_count > 0:
+                await asyncio.to_thread(self._update_chunk_count, doc_id, chunk_count)
+
             logger.info(f"Ingestion complete for {filename}. Chunks: {chunk_count}")
 
         except Exception as e:
             logger.error(f"Ingestion failed for {filename}: {str(e)}", exc_info=True)
             raise
-
-    def _insert_metadata(self, filename: str, file_type: str, chunk_count: int, owner_id: str):
-        with get_db_connection() as conn:
-            if USE_POSTGRES:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "INSERT INTO documents (filename, file_type, chunk_count, owner_id) VALUES (%s, %s, %s, %s)",
-                        (filename, file_type, chunk_count, owner_id)
-                    )
-            else:
-                conn.execute(
-                    "INSERT INTO documents (filename, file_type, chunk_count, owner_id) VALUES (?, ?, ?, ?)",
-                    (filename, file_type, chunk_count, owner_id)
-                )
-            conn.commit()

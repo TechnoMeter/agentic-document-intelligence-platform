@@ -32,6 +32,18 @@ def extract_text(reply):
         return " ".join(texts)
     return str(reply)
 
+def wait_for_embedding(session_id: str, filename: str, timeout: int = 30) -> bool:
+    """Wait until the document's chunk_count > 0, meaning embedding is complete."""
+    for _ in range(timeout):
+        resp = requests.get(f"{BASE_URL}/api/v1/documents", params={"session_id": session_id}, verify=VERIFY_SSL)
+        if resp.status_code == 200:
+            docs = resp.json().get("documents", [])
+            for doc in docs:
+                if doc["filename"] == filename and doc.get("chunk_count", -1) > 0:
+                    return True
+        time.sleep(1)
+    return False
+
 @pytest.fixture(scope="module")
 def user_a_session():
     return hash_credentials("userA", "passA")
@@ -55,6 +67,7 @@ def uploaded_doc(user_a_session):
         resp = requests.post(f"{BASE_URL}/api/v1/upload", files=files, data=data, verify=VERIFY_SSL)
         assert resp.status_code == 202, f"Upload failed: {resp.text}"
     
+    # Wait for document to appear in DB
     for _ in range(15):
         resp = requests.get(f"{BASE_URL}/api/v1/documents", params={"session_id": user_a_session}, verify=VERIFY_SSL)
         if resp.status_code == 200:
@@ -62,6 +75,9 @@ def uploaded_doc(user_a_session):
             if any(doc["filename"] == TEST_DOC for doc in docs):
                 break
         time.sleep(1)
+    
+    # Wait for embedding to complete
+    assert wait_for_embedding(user_a_session, TEST_DOC), f"Embedding for {TEST_DOC} timed out."
     
     yield TEST_DOC
     
@@ -91,6 +107,7 @@ def uploaded_isolated_doc(isolated_session):
         resp = requests.post(f"{BASE_URL}/api/v1/upload", files=files, data=data, verify=VERIFY_SSL)
         assert resp.status_code == 202, f"Upload failed: {resp.text}"
     
+    # Wait for document to appear in DB
     for _ in range(15):
         resp = requests.get(f"{BASE_URL}/api/v1/documents", params={"session_id": isolated_session}, verify=VERIFY_SSL)
         if resp.status_code == 200:
@@ -98,6 +115,9 @@ def uploaded_isolated_doc(isolated_session):
             if any(doc["filename"] == doc_name for doc in docs):
                 break
         time.sleep(1)
+    
+    # Wait for embedding to complete
+    assert wait_for_embedding(isolated_session, doc_name), f"Embedding for {doc_name} timed out."
     
     yield doc_name
     

@@ -338,7 +338,7 @@ sudo apt install docker.io docker-compose-v2 git -y
 
 ### 4. Clone Repository & Configure Environment
 ```bash
-git clone [https://github.com/TechnoMeter/agentic-document-intelligence-platform.git](https://github.com/TechnoMeter/agentic-document-intelligence-platform.git)
+git clone https://github.com/TechnoMeter/agentic-document-intelligence-platform.git
 cd agentic-document-intelligence-platform/backend
 
 # Create your environment variables file
@@ -352,7 +352,7 @@ To provision a free SSL certificate via Let's Encrypt, you cannot use a raw IP a
 2. Click on the **Public IP address** located in the *Essentials* section.
 3. Navigate to **Configuration** (under Settings).
 4. Enter your preferred domain prefix in the **DNS name label** text box.
-5. Click **Save**. Your domain is now formally registered (e.g., `https://shriram-agentic-rag.austriaeast.cloudapp.azure.com/`).
+5. Click **Save**. Your domain is now formally registered (e.g., `[https://shriram-agentic-rag.austriaeast.cloudapp.azure.com/](https://shriram-agentic-rag.austriaeast.cloudapp.azure.com/)`).
 
 ### 6. Configure Reverse Proxy & SSL (Caddy)
 To secure the application with HTTPS and allow the secure internal Docker user (`appuser`) to write the ChromaDB SQLite database to the host machine:
