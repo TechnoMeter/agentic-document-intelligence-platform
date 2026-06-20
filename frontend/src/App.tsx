@@ -158,10 +158,9 @@ function App() {
         {currentView === 'chat' && <ChatWindow />}
         {currentView === 'documents' && <DocumentLibrary />}
         
-{/* REBUILT HYBRID ARCHITECTURE MANUAL - MOBILE OPTIMIZED */}
+        {/* REBUILT HYBRID ARCHITECTURE MANUAL - MOBILE OPTIMIZED */}
         {currentView === 'instructions' && (
-          <ScrollArea className="flex-1 w-full h-full">
-            {/* Moved padding to the inner container, added w-full and min-w-0 */}
+          <div className="flex-1 w-full h-full overflow-y-auto">
             <div className="p-4 sm:p-8 max-w-4xl mx-auto w-full flex flex-col space-y-6 sm:space-y-8 animate-in fade-in duration-300 pb-20 min-w-0">
               
               {/* HERO SECTION */}
@@ -233,7 +232,7 @@ function App() {
                   <p className="text-xs sm:text-sm text-blue-50/80 leading-relaxed mb-4 break-words">
                     The system enforces strict decoupling between data ingestion (Write Path) and agentic reasoning (Read Path) to ensure high concurrency and zero UI blocking.
                   </p>
-                  <div className="w-full max-w-full overflow-x-auto border border-white/10 bg-white/5 rounded-lg backdrop-blur-sm">
+                  <div className="w-full overflow-x-auto -webkit-overflow-scrolling-touch border border-white/10 bg-white/5 rounded-lg backdrop-blur-sm">
                     <table className="w-full text-[11px] sm:text-xs text-left min-w-[500px]">
                       <thead>
                         <tr className="bg-black/40 border-b border-white/10">
@@ -279,7 +278,7 @@ function App() {
                     <Activity className="w-5 h-5 text-blue-400 mt-0.5 sm:mt-0 shrink-0" />
                     <span className="break-words">3. Agentic Routing Logic</span>
                   </h3>
-                  <div className="w-full max-w-full overflow-x-auto border border-white/10 bg-white/5 rounded-lg backdrop-blur-sm">
+                  <div className="w-full overflow-x-auto -webkit-overflow-scrolling-touch border border-white/10 bg-white/5 rounded-lg backdrop-blur-sm">
                     <table className="w-full text-[11px] sm:text-xs text-left min-w-[500px]">
                       <thead>
                         <tr className="bg-black/40 border-b border-white/10">
@@ -325,7 +324,7 @@ function App() {
               </div>
 
             </div>
-          </ScrollArea>
+          </div>
         )}
         
       </main>

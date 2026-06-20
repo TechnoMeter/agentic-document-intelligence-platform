@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useChatStore } from '@/store/chatStore';
 import { FileText, Database, Calendar, Layers, RefreshCw, Loader2, MessageSquare, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface DocumentRecord {
   id: number;
@@ -23,7 +22,7 @@ export function DocumentLibrary() {
   const setView = useChatStore((state) => state.setView);
   const setPendingPrompt = useChatStore((state) => state.setPendingPrompt);
   const sessionId = useChatStore((state) => state.sessionId);
-  const setHasDocuments = useChatStore((state) => state.setHasDocuments); // NEW
+  const setHasDocuments = useChatStore((state) => state.setHasDocuments);
 
   const fetchDocs = async () => {
     if (!sessionId) return;
@@ -31,7 +30,7 @@ export function DocumentLibrary() {
     try {
       const data = await api.getDocuments(sessionId);
       setDocuments(data.documents);
-      setHasDocuments(data.documents.length > 0); // Sync state on refresh
+      setHasDocuments(data.documents.length > 0);
     } catch (err) {
       console.error(err);
     } finally {
@@ -57,7 +56,6 @@ export function DocumentLibrary() {
     if (!sessionId) return;
     if (!confirm(`Are you sure you want to delete ${filename} from the vector store?`)) return;
     
-    // Optimistic delete
     setDocuments(docs => {
       const remaining = docs.filter(d => d.id !== id);
       setHasDocuments(remaining.length > 0);
@@ -67,7 +65,7 @@ export function DocumentLibrary() {
     try {
       await api.deleteDocument(id, filename, sessionId);
     } catch (err) {
-      fetchDocs(); // revert on fail
+      fetchDocs();
     }
   };
 
@@ -112,22 +110,23 @@ export function DocumentLibrary() {
         </button>
       </div>
 
-      <ScrollArea className="flex-1 bg-black/30 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),_0_15px_40px_rgba(0,0,0,0.5)] overflow-hidden">
-        <div className="min-w-full overflow-x-auto">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center h-64 text-white/60 gap-4 w-full">
-              <Loader2 className="w-10 h-10 animate-spin text-blue-400 drop-shadow-[0_0_10px_rgba(96,165,250,0.6)]" />
-              <p className="text-sm font-medium tracking-wide">Querying metadata layer...</p>
+      {/* REPLACED ScrollArea with plain overflow container */}
+      <div className="flex-1 bg-black/30 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),_0_15px_40px_rgba(0,0,0,0.5)] overflow-auto">
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center h-64 text-white/60 gap-4 w-full">
+            <Loader2 className="w-10 h-10 animate-spin text-blue-400 drop-shadow-[0_0_10px_rgba(96,165,250,0.6)]" />
+            <p className="text-sm font-medium tracking-wide">Querying metadata layer...</p>
+          </div>
+        ) : documents.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-64 text-white/50 gap-4 w-full">
+            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10 shadow-inner">
+              <FileText className="w-8 h-8 text-white/30" />
             </div>
-          ) : documents.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-white/50 gap-4 w-full">
-              <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10 shadow-inner">
-                <FileText className="w-8 h-8 text-white/30" />
-              </div>
-              <p className="text-sm font-medium">No vectors indexed yet.</p>
-            </div>
-          ) : (
-            <table className="w-full min-w-[600px] text-sm text-left">
+            <p className="text-sm font-medium">No vectors indexed yet.</p>
+          </div>
+        ) : (
+          <div className="min-w-[600px]">
+            <table className="w-full text-sm text-left">
               <thead className="text-xs text-blue-100/60 uppercase bg-white/5 border-b border-white/10 sticky top-0 z-10 backdrop-blur-md">
                 <tr>
                   <th className="px-6 py-5 font-semibold tracking-wider">File Entity</th>
@@ -143,7 +142,7 @@ export function DocumentLibrary() {
                     <tr className="hover:bg-white/10 transition-colors group">
                       <td className="px-6 py-4 font-medium text-white/90">
                         <div className="flex items-center gap-3">
-                          <button onClick={() => toggleExpand(doc)} className="text-white/40 hover:text-blue-300 transition-colors">
+                          <button onClick={() => toggleExpand(doc)} className="text-white/40 hover:text-blue-300 transition-colors p-1">
                             {expandedId === doc.id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                           </button>
                           <FileText className="w-4 h-4 text-blue-400 drop-shadow-[0_0_5px_rgba(96,165,250,0.5)]" />
@@ -169,7 +168,8 @@ export function DocumentLibrary() {
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {/* Actions always visible – removed opacity‑0 & group‑hover */}
+                        <div className="flex justify-end gap-2">
                           <button 
                             onClick={() => handleQuickChat(doc.filename)}
                             className="p-2 text-blue-300 hover:bg-blue-500/20 hover:text-white rounded-lg transition-colors border border-transparent hover:border-blue-400/30"
@@ -209,9 +209,9 @@ export function DocumentLibrary() {
                 ))}
               </tbody>
             </table>
-          )}
-        </div>
-      </ScrollArea>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
