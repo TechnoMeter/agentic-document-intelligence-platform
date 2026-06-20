@@ -14,6 +14,7 @@
   <img src="https://img.shields.io/badge/PostgreSQL-15-4169E1.svg?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL">
   <img src="https://img.shields.io/badge/ChromaDB-Vector-FF6B6B.svg?style=flat-square" alt="ChromaDB">
   <img src="https://img.shields.io/badge/Docker-Supported-2496ED.svg?style=flat-square&logo=docker&logoColor=white" alt="Docker">
+  <img src="https://img.shields.io/badge/CI%2FCD-GitHub_Actions-2088FF.svg?style=flat-square&logo=github-actions&logoColor=white" alt="GitHub Actions">
   
   <br><br>
   
@@ -172,6 +173,9 @@ This guarantees the system remains responsive even with continuous uploads.
 ### 5. Client‑Side Hashing (Zero‑Trust Authentication)
 The frontend never sends plaintext passwords. Instead, it concatenates the username and password, applies the SHA‑256 algorithm via `crypto.subtle.digest()`, and stores the resulting 64‑character hex string as the `sessionId` in the Zustand store. This hash is used as the `owner_id` in all API calls. The backend remains completely stateless with respect to user credentials – it only sees the hash.
 
+### 6. Automated CI/CD Pipeline
+Deployments are fully automated via GitHub Actions. Pushes to the `main` branch trigger a secure SSH workflow that synchronizes the repository on the Azure VM, safely halts containers to prevent OOM errors, rebuilds the Docker environment, and aggressively prunes dangling images to conserve storage on the constrained VM disk.
+
 ---
 
 ## 🔍 Core File Functionality Reference
@@ -294,8 +298,6 @@ npm install
 npm run dev
 ```
 *The Vite server will start on `http://localhost:5173` and automatically proxy API calls to port `8000`.*
-
-**Important:** The backend also serves the compiled frontend from its dist folder. When you visit `http://localhost:8000` (or your production domain), you will see the last built version of the UI. If you make changes to the frontend, you must rebuild it and copy the updated dist folder to the backend/dist directory (or, if you are using Docker, the dist folder is mounted from the host, so after building the frontend, the changes will be reflected automatically when you restart the backend container). For local development with hot‑reload, use the Vite dev server on port 5173. For production, the backend serves the static dist files.
 
 ---
 
@@ -427,6 +429,7 @@ All tests are designed to run in CI/CD pipelines (GitHub Actions, etc.) and ensu
 ---
 
 ## 💡 Future Scalability (Roadmap)
+* **GHCR Container Registry:** Shift the Docker build process from the Azure VM to GitHub Actions runners. Push compiled images to GHCR and configure the VM to only pull pre-built images. This eliminates deployment downtime, prevents OOM crashes on the 1 GiB server, and isolates build failures from production.
 * **Redis Caching:** Implement caching on `/api/v1/tools/document_count` to prevent database thrashing under high UI concurrency.
 * **Pessimistic Locking:** Add transaction locks in PostgreSQL for the `is_active` toggle to prevent race conditions when multiple admins modify context simultaneously.
 * **OAuth2 Authentication:** Integrate standard JWT/OAuth flows to create multi-tenant workspaces with granular permissions on document visibility.
