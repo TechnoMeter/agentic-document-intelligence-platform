@@ -4,37 +4,79 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch: # Allows manual triggering from the GitHub UI
+  workflow_dispatch:
 
 jobs:
   deploy:
-    name: Deploy to Azure VM
+    name: Build Frontend & Deploy to Azure VM
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
-      - name: Execute remote SSH commands
+      # 1. Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      # 3. Install dependencies & build frontend
+      - name: Build frontend
+        working-directory: ./frontend
+        run: |
+          npm ci --only=production
+          npm run build
+
+      # 4. Copy the built dist folder to the Azure VM via SCP
+      - name: Copy dist to backend folder on VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.AZURE_HOST }}
+          username: ${{ secrets.AZURE_USERNAME }}
+          key: ${{ secrets.AZURE_SSH_KEY }}
+          source: "frontend/dist"
+          target: "~/agentic-document-intelligence-platform/backend"
+          overwrite: true
+          # This copies frontend/dist to ~/agentic-document-intelligence-platform/backend/frontend/dist
+          # We'll move it in the SSH step below, or adjust the target.
+
+      # 5. Deploy backend with Docker
+      - name: Deploy backend via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.AZURE_HOST }}
           username: ${{ secrets.AZURE_USERNAME }}
           key: ${{ secrets.AZURE_SSH_KEY }}
-          script_stop: true # Fails the action if any script command fails
+          script_stop: true
           script: |
-            cd agentic-document-intelligence-platform
-            
-            # 1. Reset local state to avoid merge conflicts from manual edits
-            git reset --hard HEAD
+            cd ~/agentic-document-intelligence-platform/backend
+
+            # Move the copied dist folder to the correct location
+            # (SCP puts it in backend/frontend/dist, but we need backend/dist)
+            if [ -d "frontend/dist" ]; then
+              echo "Moving frontend/dist to backend/dist..."
+              rm -rf dist
+              mv frontend/dist dist
+              rmdir frontend 2>/dev/null || true  # Clean up empty frontend folder
+            else
+              echo "WARNING: frontend/dist not found. Using existing dist if present."
+            fi
+
+            # Pull latest code changes (if any backend files changed)
             git pull origin main
-            
-            # Navigate to the backend directory containing docker-compose.yml
-            cd backend
-            
-            # 2. Shut down existing containers to free RAM for the build process
+
+            # Shut down old containers
             sudo docker compose down
-            
-            # 3. Build and deploy
+
+            # Build and start new containers
             sudo docker compose up --build -d
-            
-            # 4. Reclaim storage space
+
+            # Prune old images to save disk space
             sudo docker image prune -f
+
+            echo "Deployment finished successfully."

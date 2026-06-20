@@ -203,7 +203,7 @@ The repository is built for horizontal scalability. Here is a technical breakdow
 
 * **`src/store/chatStore.ts`:** Now stores the `sessionId` (null until login). All components pull this value to pass to API calls.
 * **`src/lib/api.ts`:** Every function (`uploadFile`, `chatStream`, `getDocuments`, `toggleDocument`, `deleteDocument`, `getDocumentChunks`) now requires a `sessionId` parameter and includes it as a query param, form field, or JSON body.
-* **`src/components/Login.tsx`:** The entry point. Uses the Web Crypto API to hash credentials and sets the `sessionId` in the store. Includes a 24‑hour data wipe warning.
+* **`src/components/Login.tsx`:** The entry point. Uses the Web Crypto API to hash credentials and sets the `sessionId` in the store. Includes a 24‑hour data wipe warning. Chat history, session data, and uploaded files are synchronized across different devices and clients.
 * **`src/App.tsx`:** Conditionally renders the `Login` component if `sessionId` is null, otherwise shows the main application.
 
 ---

@@ -119,7 +119,7 @@ export function Login() {
           <Info className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
           <div className="text-left">
             <p className="font-semibold text-white mb-1">No registration required.</p>
-            <p>Simply choose a unique username and password. This acts as your private key for a temporary 24-hour workspace.</p>
+            <p>Simply choose a unique username and password. This acts as your private key for a temporary 24-hour workspace. Chat history, session data, and uploaded files are synchronized across different devices and clients. </p>
           </div>
         </div>
 
