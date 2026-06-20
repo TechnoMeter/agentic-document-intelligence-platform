@@ -15,7 +15,7 @@ function App() {
     currentView, setView, isMobileMenuOpen, setMobileMenuOpen,
     isMobileThoughtsOpen, setMobileThoughtsOpen, thoughts,
     sessionId, username, setSession, logout, setMessages, addMessage,
-    setHasDocuments // Pulled new state setter
+    setHasDocuments
   } = useChatStore();
 
   useEffect(() => {
@@ -34,7 +34,6 @@ function App() {
 
   useEffect(() => {
     if (sessionId) {
-      // 1. Fetch Chat History
       api.getChatHistory(sessionId)
         .then(history => {
           setMessages([]);
@@ -44,7 +43,6 @@ function App() {
         })
         .catch(err => console.error('Failed to load chat history:', err));
 
-      // 2. Fetch Document Count for UI Onboarding State
       api.getDocuments(sessionId)
         .then(data => {
           setHasDocuments(data.documents && data.documents.length > 0);
@@ -72,7 +70,7 @@ function App() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1 sm:gap-2">
+        <div className="flex items-center gap-2">
           <button 
             onClick={() => setMobileThoughtsOpen(!isMobileThoughtsOpen)}
             className="text-white p-2 hover:bg-white/10 rounded-md transition-colors relative"
@@ -86,10 +84,11 @@ function App() {
           
           <button 
             onClick={logout}
-            className="hidden sm:flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg shadow-[inset_0_1px_2px_rgba(255,255,255,0.3),_0_0_15px_rgba(239,68,68,0.4)] transition-all"
+            className="flex items-center justify-center w-8 h-8 sm:w-auto sm:px-3 sm:py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg shadow-[inset_0_1px_2px_rgba(255,255,255,0.3),_0_0_15px_rgba(239,68,68,0.4)] transition-all"
+            title="Logout"
           >
             <LogOut className="w-4 h-4" />
-            Logout
+            <span className="hidden sm:inline ml-1 text-xs font-medium">Logout</span>
           </button>
 
           <button 
@@ -149,16 +148,6 @@ function App() {
           >
             <LogOut className="w-4 h-4" />
             Logout
-          </button>
-        </div>
-        
-        <div className="md:hidden p-4 border-b border-white/10 relative z-10 bg-black/20">
-          <button 
-            onClick={logout}
-            className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-red-600/80 hover:bg-red-600 text-white text-sm font-medium rounded-lg shadow-[inset_0_1px_2px_rgba(255,255,255,0.3)] transition-all"
-          >
-            <LogOut className="w-4 h-4" />
-            Sign Out Session
           </button>
         </div>
 

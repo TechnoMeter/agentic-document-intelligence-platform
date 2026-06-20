@@ -9,7 +9,7 @@ export function DocumentSidebar() {
   const [fileName, setFileName] = useState<string>('');
   
   const sessionId = useChatStore((state) => state.sessionId);
-  const setHasDocuments = useChatStore((state) => state.setHasDocuments); // NEW
+  const setHasDocuments = useChatStore((state) => state.setHasDocuments);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -17,10 +17,11 @@ export function DocumentSidebar() {
 
     setFileName(file.name);
     setStatus('uploading');
+    
     try {
       await api.uploadFile(file, sessionId);
       setStatus('success');
-      setHasDocuments(true); // Tell the app a document is ready!
+      setHasDocuments(true);
       
       setTimeout(() => {
         setStatus('idle');
