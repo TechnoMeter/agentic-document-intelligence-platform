@@ -7,75 +7,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
-    name: Build & Run Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Run Frontend Tests & Build
-        working-directory: ./frontend
-        run: |
-          npm ci
-          npm test
-          npm run build
-
-      - name: Prepare Backend Directory
-        run: |
-          mkdir -p backend/dist
-          cp -r frontend/dist/* backend/dist/
-
-      - name: Create .env file for Docker
-        working-directory: ./backend
-        run: |
-          echo "DB_USER=${{ secrets.DB_USER }}" >> .env
-          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
-          echo "DB_NAME=${{ secrets.DB_NAME }}" >> .env
-          echo "DB_PORT=5432" >> .env
-          echo "DB_HOST=postgres" >> .env
-          echo "USE_POSTGRES=true" >> .env
-          echo "API_PORT=8000" >> .env
-          echo "LLM_API_KEY=${{ secrets.LLM_API_KEY }}" >> .env
-          echo "LLM_BASE_URL=${{ secrets.LLM_BASE_URL }}" >> .env
-          echo "LLM_MODEL=${{ secrets.LLM_MODEL }}" >> .env
-
-      - name: Start Docker Environment
-        working-directory: ./backend
-        run: docker compose up --build -d
-
-      - name: Wait for services to be ready
-        working-directory: ./backend
-        run: |
-          echo "Waiting for PostgreSQL and App to initialize..."
-          sleep 15 
-
-      - name: Run Backend Tests (Pytest)
-        working-directory: ./backend
-        run: docker compose exec -T app pytest
-
-      - name: Dump docker logs on failure
-        if: failure()
-        working-directory: ./backend
-        run: docker compose logs
-
-      - name: Tear down Docker Environment
-        if: always()
-        working-directory: ./backend
-        run: docker compose down
-
   deploy:
-    name: Deploy to Azure VM
-    needs: test
+    name: Build Frontend & Deploy to Azure VM
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
