@@ -88,6 +88,7 @@ out/
 
 # Vite build outputs
 *.local
+.backend/dist/
 
 # ==========================================
 # Databases, Local State & Vector Stores
