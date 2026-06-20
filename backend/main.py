@@ -395,3 +395,19 @@ async def serve_frontend(full_path: str):
     if os.path.exists(f"dist/{full_path}") and full_path != "":
         return FileResponse(f"dist/{full_path}")
     return FileResponse("dist/index.html")
+
+@app.delete("/api/v1/chat/history")
+async def clear_chat_history(session_id: str = Query(...)):
+    """Delete all chat messages for the given session."""
+    try:
+        with get_db_connection() as conn:
+            if USE_POSTGRES:
+                cur = conn.cursor()
+                cur.execute("DELETE FROM chat_history WHERE session_id = %s", (session_id,))
+            else:
+                conn.execute("DELETE FROM chat_history WHERE session_id = ?", (session_id,))
+            conn.commit()
+        return {"status": "cleared"}
+    except Exception as e:
+        logger.error(f"Failed to clear chat history: {e}")
+        raise HTTPException(status_code=500, detail="Failed to clear chat history.")

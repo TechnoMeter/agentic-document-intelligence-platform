@@ -6,7 +6,8 @@ import { useChatStream } from '@/hooks/useChatStream';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Bot, User } from 'lucide-react';
+import { Send, Bot, User, Trash2 } from 'lucide-react';
+import { api } from '@/lib/api';
 import clsx from 'clsx';
 
 export function ChatWindow() {
@@ -15,6 +16,8 @@ export function ChatWindow() {
   const isLoading = useChatStore((state) => state.isLoading);
   const pendingPrompt = useChatStore((state) => state.pendingPrompt);
   const setPendingPrompt = useChatStore((state) => state.setPendingPrompt);
+  const sessionId = useChatStore((state) => state.sessionId);
+  const clearChat = useChatStore((state) => state.clearChat);
   const { sendMessage } = useChatStream();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -35,8 +38,41 @@ export function ChatWindow() {
     setInput('');
   };
 
+  const handleClearHistory = async () => {
+    if (!sessionId) return;
+    if (messages.length === 0) return; // nothing to clear
+
+    // Confirm before wiping
+    if (!window.confirm('This will permanently delete your entire chat history for this session. Continue?')) {
+      return;
+    }
+
+    try {
+      await api.clearChatHistory(sessionId);
+      clearChat(); // clear local store (messages + thoughts)
+    } catch (err) {
+      console.error('Failed to clear chat history:', err);
+      alert('Could not clear history. Please try again.');
+    }
+  };
+
   return (
     <div className="flex flex-col h-full relative z-10">
+      {/* ---- NEW HEADER with Clear Button ---- */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-black/10 backdrop-blur-sm shrink-0">
+        <span className="text-xs font-medium text-white/60 uppercase tracking-wider">Conversation</span>
+        <button
+  onClick={handleClearHistory}
+  className="text-white/30 hover:text-red-400 active:text-red-400 p-2 sm:p-1.5 rounded-lg hover:bg-red-500/10 active:bg-red-500/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+  disabled={messages.length === 0}
+  title="Clear chat history (permanent)"
+>
+  <Trash2 className="w-5 h-5 sm:w-4 sm:h-4" />
+  <span className="sr-only">Clear History</span>
+</button>
+      </div>
+
+      {/* ---- Messages (same as before, just moved ScrollArea here) ---- */}
       <ScrollArea className="flex-1 p-2 sm:p-6">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-[60vh] text-white/70 space-y-5 px-4">
@@ -94,7 +130,7 @@ export function ChatWindow() {
         )}
       </ScrollArea>
 
-      {/* Input Area: Aero Floating Pill */}
+      {/* Input Area (unchanged) */}
       <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-16 pointer-events-none">
         <div className="max-w-4xl mx-auto flex gap-2 sm:gap-3 items-center bg-white/10 backdrop-blur-3xl border border-white/20 p-2 sm:p-2.5 rounded-full shadow-[0_10px_40px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.3)] focus-within:bg-white/20 focus-within:border-blue-400/50 transition-all pointer-events-auto">
           <Input

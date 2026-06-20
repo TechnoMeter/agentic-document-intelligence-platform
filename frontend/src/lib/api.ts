@@ -65,11 +65,17 @@ export const api = {
     return data.result;
   },
 
-  // ---- NEW ----
   async getChatHistory(sessionId: string): Promise<{ role: string; content: string; timestamp: string }[]> {
     const res = await fetch(`${API_BASE}/api/v1/chat/history?session_id=${encodeURIComponent(sessionId)}`);
     if (!res.ok) throw new Error('Failed to load chat history.');
     const data = await res.json();
     return data.history;
-  }
+  },
+
+  async clearChatHistory(sessionId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/chat/history?session_id=${encodeURIComponent(sessionId)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to clear chat history.');
+}
 };
