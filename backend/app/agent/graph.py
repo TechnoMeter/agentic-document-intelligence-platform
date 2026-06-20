@@ -1,5 +1,3 @@
-# This module defines the agent's reasoning graph for the document intelligence platform.
-
 import os
 from typing import TypedDict, Annotated, Sequence
 from langchain_core.messages import BaseMessage, SystemMessage
@@ -86,25 +84,24 @@ Do not say you are an AI, an AI model, an autonomous agent, or anything similar.
 
 You have access to tools to search document contents and retrieve system metadata. Always use the provided tools to answer questions about uploaded files. Synthesize the information cleanly using standard Markdown formatting. Do not hallucinate data."""
 
-def initialize_state(state: AgentState) -> dict:
-    if not any(isinstance(m, SystemMessage) for m in state["messages"]):
-        return {"messages": [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]}
-    return {}
-
 async def agent_node(state: AgentState) -> dict:
-    messages = state["messages"]
+    # Dynamically prepend the system prompt before invoking the LLM.
+    # This guarantees the SystemMessage is always at messages[0] so the 
+    # LangChain Gemini adapter maps it to the official system_instruction API payload.
+    # We do NOT return the SystemMessage in the output dictionary to prevent memory pollution.
+    messages = [SystemMessage(content=SYSTEM_PROMPT)] + list(state["messages"])
+    
     response = await llm_with_tools.ainvoke(messages)
     return {"messages": [response]}
 
 workflow = StateGraph(AgentState)
-workflow.add_node("init", initialize_state)
 workflow.add_node("agent", agent_node)
 
 tool_node = ToolNode(tools)
 workflow.add_node("tools", tool_node)
 
-workflow.set_entry_point("init")
-workflow.add_edge("init", "agent")
+# Route directly to the agent node
+workflow.set_entry_point("agent")
 workflow.add_conditional_edges("agent", tools_condition)
 workflow.add_edge("tools", "agent")
 
