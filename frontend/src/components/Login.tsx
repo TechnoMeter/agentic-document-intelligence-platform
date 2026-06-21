@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Shield, Clock, Info, Eye, EyeOff, Loader2, User } from 'lucide-react';
+import { Database, Shield, Clock, Info, Eye, EyeOff, Loader2, User, X } from 'lucide-react';
 import { useChatStore } from '@/store/chatStore';
-import { getProfiles, addProfile, Profile } from '@/lib/utils';
+import { getProfiles, addProfile, removeProfile, Profile } from '@/lib/utils';
 
 async function hashCredentials(username: string, password: string): Promise<string> {
   const combined = username + password;
@@ -81,44 +81,59 @@ export function Login() {
     setSession(profile.username, profile.sessionId);
   };
 
+  const handleRemoveProfile = (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation(); // Prevent triggering the profile click
+    removeProfile(sessionId);
+    setProfiles(getProfiles()); // Refresh the list
+  };
+
   return (
     <div className="flex min-h-[100dvh] w-full items-center justify-center bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#003B5C] via-[#051B2C] to-[#000000] p-4 py-12">
       
       <div className="w-full max-w-md bg-white/5 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),_0_15px_40px_rgba(0,0,0,0.5)] p-5 sm:p-8 animate-in fade-in duration-500">
         
-<div className="flex flex-col items-center text-center">
-  {/* Glassmorphic Hero Icon */}
-  <div className="w-20 h-20 rounded-[2rem] bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-xl border border-white/20 flex items-center justify-center shadow-[0_8px_32px_rgba(0,0,0,0.2)] relative overflow-hidden mb-5">
-    <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
-    <Database className="w-10 h-10 text-blue-50 drop-shadow-md relative z-10" />
-  </div>
-  
-  {/* Glassmorphic Gradient Text */}
-  <h1 className="font-['Caveat',_cursive] font-medium text-[72px] leading-none text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200 pb-2 drop-shadow-sm">
-    ShriRAGx
-  </h1>
-  
-  <div className="text-center text-blue-100/70 mt-3">
-    <p className="text-sm font-medium tracking-wide">Upload your files. Ask anything. Get clear answers – instantly.</p>
-    <p className="text-xs text-blue-100/50 mt-1.5">Just your documents and our AI. It's that easy.</p>
-  </div>
-</div>
+        <div className="flex flex-col items-center text-center">
+          {/* Glassmorphic Hero Icon */}
+          <div className="w-20 h-20 rounded-[2rem] bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-xl border border-white/20 flex items-center justify-center shadow-[0_8px_32px_rgba(0,0,0,0.2)] relative overflow-hidden mb-5">
+            <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
+            <Database className="w-10 h-10 text-blue-50 drop-shadow-md relative z-10" />
+          </div>
+          
+          {/* Glassmorphic Gradient Text */}
+          <h1 className="font-['Caveat',_cursive] font-medium text-[72px] leading-none text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200 pb-2 drop-shadow-sm">
+            ShriRAGx
+          </h1>
+          
+          <div className="text-center text-blue-100/70 mt-3">
+            <p className="text-sm font-medium tracking-wide">Upload your files. Ask anything. Get clear answers – instantly.</p>
+            <p className="text-xs text-blue-100/50 mt-1.5">Just your documents and our AI. It's that easy.</p>
+          </div>
+        </div>
 
         {profiles.length > 0 && (
-          <div className="mt-8"> {/* Added slightly more top margin since it's no longer inside the flex-col */}
+          <div className="mt-8">
             <p className="text-xs font-medium text-blue-200/60 uppercase tracking-wider text-center mb-3">
               Return to your session
             </p>
             <div className="flex flex-wrap justify-center gap-3">
               {profiles.map((profile) => (
-                <button
-                  key={profile.sessionId}
-                  onClick={() => handleProfileClick(profile)}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-sm font-medium text-white transition-all shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),_0_0_15px_rgba(34,197,94,0.3)] hover:shadow-[0_0_25px_rgba(34,197,94,0.6)]"
-                >
-                  <User className="w-5 h-5" />
-                  {profile.username}
-                </button>
+                <div key={profile.sessionId} className="relative group">
+                  <button
+                    onClick={() => handleProfileClick(profile)}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-sm font-medium text-white transition-all shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),_0_0_15px_rgba(34,197,94,0.3)] hover:shadow-[0_0_25px_rgba(34,197,94,0.6)]"
+                  >
+                    <User className="w-5 h-5" />
+                    {profile.username}
+                  </button>
+                  {/* Remove (X) button */}
+                  <button
+                    onClick={(e) => handleRemoveProfile(e, profile.sessionId)}
+                    className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500/80 hover:bg-red-600 text-white flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                    aria-label="Remove session"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
               ))}
             </div>
             <hr className="border-white/10 my-6" />
