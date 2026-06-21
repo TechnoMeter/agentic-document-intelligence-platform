@@ -86,16 +86,23 @@ export function Login() {
       
       <div className="w-full max-w-md bg-white/5 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),_0_15px_40px_rgba(0,0,0,0.5)] p-5 sm:p-8 animate-in fade-in duration-500">
         
-        <div className="flex flex-col items-center space-y-4 text-center">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-b from-blue-300 to-blue-600 flex items-center justify-center shadow-[inset_0_1px_2px_rgba(255,255,255,0.8),_0_0_25px_rgba(59,130,246,0.6)] border border-white/40">
-            <Database className="w-8 h-8 text-white drop-shadow-md" />
-          </div>
-          <h1 className="text-2xl font-bold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">ShriRAGx</h1>
-          <div className="text-center text-blue-100/70">
-            <p className="text-sm font-medium">Upload your files. Ask anything. Get clear answers – instantly.</p>
-            <p className="text-xs text-blue-100/50 mt-1">Just your documents and our AI. It's that easy.</p>
-          </div>
-        </div> 
+<div className="flex flex-col items-center text-center">
+  {/* Glassmorphic Hero Icon */}
+  <div className="w-20 h-20 rounded-[2rem] bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-xl border border-white/20 flex items-center justify-center shadow-[0_8px_32px_rgba(0,0,0,0.2)] relative overflow-hidden mb-5">
+    <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
+    <Database className="w-10 h-10 text-blue-50 drop-shadow-md relative z-10" />
+  </div>
+  
+  {/* Glassmorphic Gradient Text */}
+  <h1 className="font-['Caveat',_cursive] font-medium text-[72px] leading-none text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200 pb-2 drop-shadow-sm">
+    ShriRAGx
+  </h1>
+  
+  <div className="text-center text-blue-100/70 mt-3">
+    <p className="text-sm font-medium tracking-wide">Upload your files. Ask anything. Get clear answers – instantly.</p>
+    <p className="text-xs text-blue-100/50 mt-1.5">Just your documents and our AI. It's that easy.</p>
+  </div>
+</div>
 
         {profiles.length > 0 && (
           <div className="mt-8"> {/* Added slightly more top margin since it's no longer inside the flex-col */}

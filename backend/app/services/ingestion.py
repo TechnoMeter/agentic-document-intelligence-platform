@@ -23,6 +23,7 @@ from ebooklib import epub
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.services.vector_store import get_vector_store
 from app.database import get_db_connection
+from app.services.ocr import ocr_pdf
 
 logger = logging.getLogger(__name__)
 USE_POSTGRES = os.getenv("USE_POSTGRES", "false").lower() == "true"
@@ -43,9 +44,27 @@ class DocumentProcessor:
         if ext in ['txt', 'md']:
             return content.decode("utf-8", errors="ignore")
             
+        
         elif ext == 'pdf':
+        # First, try standard text extraction using PyPDF
             pdf_reader = pypdf.PdfReader(io.BytesIO(content))
-            return "".join((page.extract_text() or "") + "\n" for page in pdf_reader.pages)
+            extracted = "".join((page.extract_text() or "") + "\n" for page in pdf_reader.pages)
+            
+            # If we got very little text and OCR is enabled, call Azure DI
+            if len(extracted.strip()) < 100 and os.getenv("ENABLE_OCR", "false").lower() == "true":
+                logger.info(f"PDF {filename} has little text, attempting Azure Document Intelligence OCR...")
+                try:
+                    ocr_result = ocr_pdf(content)
+                    if ocr_result and len(ocr_result.strip()) > len(extracted.strip()):
+                        extracted = ocr_result
+                        logger.info(f"Azure DI OCR successful for {filename}, extracted {len(ocr_result)} chars.")
+                    else:
+                        logger.warning("Azure DI produced no better text, keeping original extraction.")
+                except Exception as e:
+                    logger.error(f"Azure DI OCR fallback failed for {filename}: {e}")
+                    # Keep original extracted text (even if short)
+            
+            return extracted
             
         elif ext == 'docx':
             doc = docx.Document(io.BytesIO(content))

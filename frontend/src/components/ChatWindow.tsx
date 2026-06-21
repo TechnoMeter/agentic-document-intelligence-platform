@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   Send, Bot, User, Trash2, Paperclip, 
-  Sparkles, CheckCircle2, Loader2, ChevronDown, ChevronUp
+  Sparkles, CheckCircle2, Loader2, ChevronDown, ChevronUp, FolderOpen
 } from 'lucide-react';
 import { DocumentSidebar } from '@/components/DocumentSidebar'; 
 import { api } from '@/lib/api';
@@ -17,7 +17,7 @@ import clsx from 'clsx';
 export function ChatWindow() {
   const [input, setInput] = useState('');
   const [isUploading, setIsUploading] = useState(false);
-  const [showMobileThoughts, setShowMobileThoughts] = useState(false); // FIXED: Added missing state
+  const [showMobileThoughts, setShowMobileThoughts] = useState(false);
 
   const messages = useChatStore((state) => state.messages);
   const isLoading = useChatStore((state) => state.isLoading);
@@ -28,6 +28,7 @@ export function ChatWindow() {
   const hasDocuments = useChatStore((state) => state.hasDocuments);
   const setHasDocuments = useChatStore((state) => state.setHasDocuments);
   const clearChat = useChatStore((state) => state.clearChat);
+  const setView = useChatStore((state) => state.setView);
   
   const { sendMessage } = useChatStream();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -44,7 +45,6 @@ export function ChatWindow() {
   }, [pendingPrompt, isLoading, sendMessage, setPendingPrompt]);
 
   useEffect(() => {
-    // Auto-expand thoughts while generating, auto-collapse when finished
     if (isLoading) {
       setShowMobileThoughts(true);
     } else {
@@ -71,7 +71,7 @@ export function ChatWindow() {
       alert('Failed to upload document.');
     } finally {
       setIsUploading(false);
-      event.target.value = ''; // Reset input so the user can upload another file immediately
+      event.target.value = ''; 
     }
   };
 
@@ -96,15 +96,20 @@ export function ChatWindow() {
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-black/10 backdrop-blur-sm shrink-0">
         <span className="text-xs font-medium text-white/60 uppercase tracking-wider flex items-center gap-2">
           Conversation
-          <span className={clsx(
-            "px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide flex items-center gap-1 shadow-sm border",
-            hasDocuments 
-              ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/30 shadow-[0_0_10px_rgba(52,211,153,0.2)]" 
-              : "bg-amber-500/20 text-amber-300 border-amber-400/30 shadow-[0_0_10px_rgba(245,158,11,0.2)]"
-          )}>
-            {hasDocuments ? <CheckCircle2 className="w-3 h-3" /> : <Sparkles className="w-3 h-3" />}
-            {hasDocuments ? 'Knowledge Base Ready' : 'Awaiting Context'}
-          </span>
+          {hasDocuments ? (
+            <button
+              onClick={() => setView('documents')}
+              className="px-2.5 py-1 rounded-full text-[11px] font-medium tracking-wide flex items-center gap-1.5 shadow-sm border bg-blue-500/20 hover:bg-blue-500/30 text-blue-100 border-blue-400/30 transition-colors cursor-pointer"
+            >
+              <FolderOpen className="w-3.5 h-3.5 text-blue-300" />
+              View Your Files
+            </button>
+          ) : (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide flex items-center gap-1 shadow-sm border bg-amber-500/20 text-amber-300 border-amber-400/30 shadow-[0_0_10px_rgba(245,158,11,0.2)]">
+              <Sparkles className="w-3 h-3" />
+              Awaiting Context
+            </span>
+          )}
         </span>
         <button
           onClick={handleClearHistory}
@@ -136,6 +141,23 @@ export function ChatWindow() {
                   ? "Your files are ready. Ask me anything to begin searching the vectors." 
                   : "I cannot answer questions yet! Upload a document to give me context."}
               </p>
+
+              {/* NON-TECHNICAL EMPTY STATE CARD */}
+              {hasDocuments && (
+                <div className="mt-8 bg-gradient-to-b from-white/10 to-white/5 border border-white/10 rounded-2xl p-5 w-full text-center shadow-lg backdrop-blur-md animate-in fade-in zoom-in-95 duration-500">
+                  <FolderOpen className="w-8 h-8 text-blue-300 mx-auto mb-3 drop-shadow-md" />
+                  <h3 className="text-white font-medium text-base mb-1">Your files are securely loaded</h3>
+                  <p className="text-blue-100/70 text-xs mb-5 max-w-[250px] mx-auto leading-relaxed">
+                    You can view what you've uploaded, or permanently remove files you no longer need.
+                  </p>
+                  <button
+                    onClick={() => setView('documents')}
+                    className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm font-medium transition-all shadow-[0_0_15px_rgba(59,130,246,0.4)] w-full sm:w-auto"
+                  >
+                    Open File Manager
+                  </button>
+                </div>
+              )}
             </div>
 
             {hasDocuments === false && (
@@ -178,9 +200,9 @@ export function ChatWindow() {
                     msg.isError && "bg-red-900/40 border-red-500/50 text-red-200"
                   )}>
                     
-                    {/* ===== INLINE AGENT TRACING (Only on latest assistant message) ===== */}
                     {isLatestAssistant && thoughts.length > 0 && (
-<div className="lg:hidden mb-3 border border-white/10 bg-black/20 rounded-lg overflow-hidden transition-all shadow-inner">                        <button
+                      <div className="lg:hidden mb-3 border border-white/10 bg-black/20 rounded-lg overflow-hidden transition-all shadow-inner">                        
+                        <button
                           onClick={() => setShowMobileThoughts(!showMobileThoughts)}
                           className="flex items-center justify-between w-full p-2.5 text-[10px] font-bold text-emerald-400/90 uppercase tracking-widest hover:bg-white/5 transition-colors"
                         >
@@ -207,7 +229,6 @@ export function ChatWindow() {
                       </div>
                     )}
 
-                    {/* ===== MESSAGE CONTENT ===== */}
                     <div className="prose prose-sm md:prose-base prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/10 prose-pre:shadow-inner break-words">
                       {msg.isStreaming ? (
                         <div className="flex items-center gap-1">
@@ -220,7 +241,6 @@ export function ChatWindow() {
                         </ReactMarkdown>
                       )}
                     </div>
-
                   </div>
                 </div>
               );
@@ -265,6 +285,19 @@ export function ChatWindow() {
               disabled={isUploading}
             />
           </label>
+
+          {/* NON-TECHNICAL MOBILE INPUT BAR SHORTCUT */}
+          {hasDocuments && (
+            <button
+              onClick={() => setView('documents')}
+              className="md:hidden h-10 w-10 flex items-center justify-center shrink-0 rounded-full transition-all text-blue-200 hover:text-white hover:bg-white/10 relative"
+              title="View Your Files"
+            >
+              <FolderOpen className="w-5 h-5 drop-shadow-md" />
+              {/* Subtle visual indicator that files exist here */}
+              <span className="absolute top-2 right-2 w-2 h-2 bg-emerald-500 rounded-full border border-black shadow-sm"></span>
+            </button>
+          )}
 
           <Input
             value={input}

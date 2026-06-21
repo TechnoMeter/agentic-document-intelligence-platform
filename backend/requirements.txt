@@ -25,3 +25,4 @@ striprtf==0.0.26
 odfpy==1.4.1
 EbookLib==0.18
 freezegun==1.5.1
+azure-ai-documentintelligence==1.0.2

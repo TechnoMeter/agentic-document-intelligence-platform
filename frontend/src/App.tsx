@@ -58,15 +58,24 @@ function App() {
     <div className="flex flex-col md:flex-row h-[100dvh] w-full overflow-hidden font-sans text-slate-100 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#003B5C] via-[#051B2C] to-[#000000]">      
       
       <header className="md:hidden flex items-center justify-between p-3 bg-black/20 backdrop-blur-md border-b border-white/10 z-30 relative shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-b from-blue-300 to-blue-600 flex items-center justify-center shadow-[inset_0_1px_2px_rgba(255,255,255,0.8),_0_0_15px_rgba(59,130,246,0.6)] border border-white/40 shrink-0">
-            <Database className="w-4 h-4 text-white drop-shadow-md" />
+<div className="flex items-center gap-3 min-w-0">
+          {/* Glassmorphic Icon */}
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-xl border border-white/20 flex items-center justify-center shadow-[0_4px_15px_rgba(0,0,0,0.15)] shrink-0">
+            <Database className="w-5 h-5 text-blue-50 drop-shadow-sm" />
           </div>
-          <div className="truncate">
-            <h1 className="font-bold text-sm tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white/95">ShriRAGx</h1>
-            <p className="text-sm font-bold text-green-400 truncate drop-shadow-[0_0_10px_rgba(74,222,128,0.9)] tracking-wide">
-              {username}
-            </p>
+          
+          {/* Aligned Typography */}
+          <div className="flex flex-col justify-center min-w-0">
+            <h1 className="font-['Caveat',_cursive] font-medium text-[28px] leading-none text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200 pb-0.5">
+              ShriRAGx
+            </h1>
+            {/* Aero Username Pill */}
+            <div className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-full bg-black/20 border border-white/10 backdrop-blur-md w-fit shadow-inner mt-0.5">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)] animate-pulse" />
+              <span className="text-[12px] font-medium text-emerald-100/90 tracking-wider truncate max-w-[90px] leading-none">
+                {username}
+              </span>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -100,15 +109,25 @@ function App() {
         <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent opacity-50 pointer-events-none" />
         
         <div className="hidden md:flex items-center justify-between p-4 border-b border-white/10 relative z-10">
-          <div className="flex items-center gap-3 text-white min-w-0">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-b from-blue-300 to-blue-600 flex items-center justify-center shadow-[inset_0_1px_2px_rgba(255,255,255,0.8),_0_0_15px_rgba(59,130,246,0.6)] border border-white/40 shrink-0">
-              <Database className="w-4 h-4 text-white drop-shadow-md" />
+<div className="flex items-center gap-3 min-w-0">
+            {/* Glassmorphic Icon */}
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-xl border border-white/20 flex items-center justify-center shadow-[0_8px_20px_rgba(0,0,0,0.15)] shrink-0 relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
+              <Database className="w-5 h-5 text-blue-50 drop-shadow-md relative z-10" />
             </div>
-            <div className="truncate">
-              <h1 className="font-bold text-base tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-white/95">ShriRAGx</h1>
-              <p className="text-sm font-bold text-green-400 truncate drop-shadow-[0_0_12px_rgba(74,222,128,1)] tracking-wide">
-                {username}
-              </p>
+            
+            {/* Aligned Typography */}
+            <div className="flex flex-col justify-center min-w-0">
+              <h1 className="font-['Caveat',_cursive] font-medium text-[26px] leading-none text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200 pb-0.5">
+                ShriRAGx
+              </h1>
+              {/* Aero Username Pill */}
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-black/20 border border-white/10 backdrop-blur-md w-fit shadow-inner mt-1">
+                <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
+                <span className="text-[12px] font-medium text-emerald-100/90 tracking-wider truncate max-w-[120px] leading-none">
+                  {username}
+                </span>
+              </div>
             </div>
           </div>
           <button 
@@ -163,8 +182,18 @@ function App() {
           <div className="flex-1 w-full h-full overflow-y-auto">
             <div className="p-4 sm:p-8 max-w-4xl mx-auto w-full flex flex-col space-y-6 sm:space-y-8 animate-in fade-in duration-300 pb-20 min-w-0">
               
-              {/* HERO SECTION */}
+{/* HERO SECTION */}
               <div className="bg-black/20 p-5 sm:p-8 rounded-2xl sm:rounded-3xl backdrop-blur-md border border-white/10 shadow-lg relative overflow-hidden w-full break-words">
+                
+{/* Luminous Aero Mobile Return Button */}
+                <button 
+                  onClick={() => setView('chat')}
+                  className="md:hidden relative z-20 mb-6 inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-gradient-to-r from-blue-500/20 to-blue-600/10 backdrop-blur-xl border border-blue-400/30 shadow-[0_4px_20px_rgba(59,130,246,0.25),inset_0_1px_1px_rgba(255,255,255,0.3)] text-sm font-semibold text-blue-50 hover:from-blue-400/30 hover:to-blue-500/20 transition-all active:scale-95"
+                >
+                  <MessageSquare className="w-4 h-4 text-blue-300 drop-shadow-[0_0_8px_rgba(147,197,253,0.8)]" />
+                  Return to Chat
+                </button>
+
                 <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none hidden sm:block">
                   <BookOpen className="w-48 h-48" />
                 </div>

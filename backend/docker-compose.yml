@@ -32,6 +32,9 @@ services:
       - LLM_BASE_URL=${LLM_BASE_URL}
       - LLM_MODEL=${LLM_MODEL}
       - API_PORT=${API_PORT}
+      - AZURE_DI_ENDPOINT=${AZURE_DI_ENDPOINT}
+      - AZURE_DI_KEY=${AZURE_DI_KEY}
+      - ENABLE_OCR=${ENABLE_OCR}
     volumes:
       - .:/app
       - ./chroma_db:/app/chroma_db
