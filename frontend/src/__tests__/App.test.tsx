@@ -16,9 +16,6 @@ vi.mock('@/components/DocumentLibrary', () => ({
 vi.mock('@/components/DocumentSidebar', () => ({
   DocumentSidebar: () => <div>DocumentSidebar</div>,
 }));
-vi.mock('@/components/ThoughtStream', () => ({
-  ThoughtStream: () => <div>ThoughtStream</div>,
-}));
 vi.mock('@/components/Login', () => ({
   Login: () => <div>Login</div>,
 }));
@@ -61,7 +58,6 @@ describe('App', () => {
     expect(screen.getByText('ChatWindow')).toBeInTheDocument();
     expect(screen.queryByText('Login')).not.toBeInTheDocument();
     expect(screen.getByText('DocumentSidebar')).toBeInTheDocument();
-    expect(screen.getByText('ThoughtStream')).toBeInTheDocument();
   });
 
   it('switches views when navigation buttons are clicked', async () => {

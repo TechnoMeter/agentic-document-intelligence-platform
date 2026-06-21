@@ -76,21 +76,20 @@ export function ChatWindow() {
   };
 
   const handleClearHistory = async () => {
-    if (!sessionId || messages.length === 0) return;
+  if (!sessionId || messages.length === 0) return;
 
-    if (!window.confirm('This will permanently delete your entire chat history for this session. Continue?')) {
-      return;
-    }
+  if (!window.confirm('This will permanently delete your entire chat history and reset the agent’s memory for this session. Continue?')) {
+    return;
+  }
 
-    try {
-      await api.clearChatHistory(sessionId);
-      clearChat(); 
-    } catch (err) {
-      console.error('Failed to clear chat history:', err);
-      alert('Could not clear history. Please try again.');
-    }
-  };
-
+  try {
+    await api.resetSession(sessionId);
+    clearChat(); // clears local messages and thoughts
+  } catch (err) {
+    console.error('Failed to reset session:', err);
+    alert('Could not clear history. Please try again.');
+  }
+};
   return (
     <div className="flex flex-col h-full relative z-10">
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-black/10 backdrop-blur-sm shrink-0">
@@ -201,7 +200,7 @@ export function ChatWindow() {
                   )}>
                     
                     {isLatestAssistant && thoughts.length > 0 && (
-                      <div className="lg:hidden mb-3 border border-white/10 bg-black/20 rounded-lg overflow-hidden transition-all shadow-inner">                        
+                      <div className="mb-3 border border-white/10 bg-black/20 rounded-lg overflow-hidden transition-all shadow-inner">                        
                         <button
                           onClick={() => setShowMobileThoughts(!showMobileThoughts)}
                           className="flex items-center justify-between w-full p-2.5 text-[10px] font-bold text-emerald-400/90 uppercase tracking-widest hover:bg-white/5 transition-colors"

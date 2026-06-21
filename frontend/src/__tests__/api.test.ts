@@ -91,4 +91,12 @@ describe('api', () => {
     const call = mockFetch.mock.calls[0];
     expect(call[0]).toContain(`/file.txt/chunks?session_id=${encodeURIComponent(sessionId)}`);
   });
+
+  it('resetSession appends session_id as query param', async () => {
+  mockFetch.mockResolvedValueOnce({ ok: true });
+  await api.resetSession(sessionId);
+  const call = mockFetch.mock.calls[0];
+  expect(call[0]).toContain(`/api/v1/session/reset?session_id=${encodeURIComponent(sessionId)}`);
+  expect(call[1].method).toBe('POST');
+});
 });

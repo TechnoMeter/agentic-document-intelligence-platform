@@ -46,24 +46,23 @@ class DocumentProcessor:
             
         
         elif ext == 'pdf':
-        # First, try standard text extraction using PyPDF
+            # 1. First, try standard PyPDF extraction (fast, works for text-based PDFs)
             pdf_reader = pypdf.PdfReader(io.BytesIO(content))
             extracted = "".join((page.extract_text() or "") + "\n" for page in pdf_reader.pages)
             
-            # If we got very little text and OCR is enabled, call Azure DI
+            # 2. If extracted text is very short (likely scanned) and OCR is enabled, fall back to OCR
             if len(extracted.strip()) < 100 and os.getenv("ENABLE_OCR", "false").lower() == "true":
-                logger.info(f"PDF {filename} has little text, attempting Azure Document Intelligence OCR...")
                 try:
-                    ocr_result = ocr_pdf(content)
-                    if ocr_result and len(ocr_result.strip()) > len(extracted.strip()):
-                        extracted = ocr_result
-                        logger.info(f"Azure DI OCR successful for {filename}, extracted {len(ocr_result)} chars.")
+                    ocr_text = ocr_pdf(content)
+                    if ocr_text and len(ocr_text.strip()) > 0:
+                        logger.info(f"OCR succeeded for {filename} (chars: {len(ocr_text)})")
+                        return ocr_text
                     else:
-                        logger.warning("Azure DI produced no better text, keeping original extraction.")
+                        logger.warning(f"OCR returned empty for {filename}, keeping PyPDF extraction.")
                 except Exception as e:
-                    logger.error(f"Azure DI OCR fallback failed for {filename}: {e}")
-                    # Keep original extracted text (even if short)
+                    logger.error(f"OCR exception for {filename}: {e}, keeping PyPDF extraction.")
             
+            # 3. Return the original PyPDF extraction (may be empty for scanned PDFs)
             return extracted
             
         elif ext == 'docx':
@@ -174,7 +173,15 @@ class DocumentProcessor:
             logger.info(f"Metadata inserted for {filename} (id: {doc_id})")
 
             # 2. Extract text
-            text_content = await asyncio.to_thread(self._extract_text, content, filename)
+            # Extract text, with a timeout for OCR (if enabled)
+            try:
+                text_content = await asyncio.wait_for(
+                    asyncio.to_thread(self._extract_text, content, filename),
+                    timeout=60.0  # 60 seconds max for OCR; adjust as needed
+                )
+            except asyncio.TimeoutError:
+                logger.warning(f"Text extraction timed out for {filename}, falling back to empty text.")
+                text_content = ""  # or you could try PyPDF directly, but we'll just treat as empty
 
             if not text_content.strip():
                 logger.warning(f"No extractable text found in {filename}.")

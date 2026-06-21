@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { ChatWindow } from '@/components/ChatWindow';
-import { ThoughtStream } from '@/components/ThoughtStream';
 import { DocumentSidebar } from '@/components/DocumentSidebar';
 import { DocumentLibrary } from '@/components/DocumentLibrary';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -357,20 +356,6 @@ function App() {
         )}
         
       </main>
-
-      {/* RESTORED RIGHT SIDEBAR */}
-      <aside className="w-[320px] bg-black/20 backdrop-blur-2xl hidden lg:flex flex-col border-l border-white/10 relative z-20 shadow-[inset_1px_0_0_rgba(255,255,255,0.05),_-5px_0_30px_rgba(0,0,0,0.5)]">
-        <div className="p-4 border-b border-white/10 relative z-10 bg-gradient-to-b from-white/5 to-transparent">
-          <h2 className="font-semibold text-sm text-white/95 flex items-center gap-2 drop-shadow-md">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)] animate-pulse border border-white/40"></span>
-            Agent Orchestration
-          </h2>
-          <p className="text-xs text-blue-200/60 mt-1">Real-time LangGraph routing trace</p>
-        </div>
-        <ScrollArea className="flex-1 relative z-10">
-          <ThoughtStream />
-        </ScrollArea>
-      </aside>
       
     </div>
   );

@@ -22,6 +22,7 @@ from app.agent.graph import app_agent
 from app.database import get_db_connection, USE_POSTGRES
 from app.services.vector_store import get_vector_store
 from app.services.chat_history import save_message, get_chat_history, cleanup_expired_chat_history
+from app.agent.graph import clear_checkpoint
 
 load_dotenv()
 
@@ -296,6 +297,8 @@ async def toggle_document(doc_id: int, session_id: str = Query(...), is_active: 
             else:
                 cur.execute("UPDATE documents SET is_active = ? WHERE id = ?", (is_active, doc_id))
             conn.commit()
+                    # Clear the agent's memory for this session
+        clear_checkpoint(session_id)
         return {"status": "success", "is_active": is_active}
     except HTTPException:
         raise
@@ -330,6 +333,8 @@ async def delete_document(doc_id: int, session_id: str = Query(...)):
         vector_store._collection.delete(
             where={"$and": [{"source": filename}, {"owner_id": owner_id}]}
         )
+                # Clear the agent's memory for this session
+        clear_checkpoint(session_id)
         return {"status": "deleted"}
     except HTTPException:
         raise
@@ -425,3 +430,24 @@ async def clear_chat_history(session_id: str = Query(...)):
     except Exception as e:
         logger.error(f"Failed to clear chat history: {e}")
         raise HTTPException(status_code=500, detail="Failed to clear chat history.")
+    
+@app.post("/api/v1/session/reset")
+async def reset_session(session_id: str = Query(...)):
+    """Clear chat history and agent checkpoint for the given session."""
+    try:
+        # 1. Clear chat history
+        with get_db_connection() as conn:
+            if USE_POSTGRES:
+                cur = conn.cursor()
+                cur.execute("DELETE FROM chat_history WHERE session_id = %s", (session_id,))
+            else:
+                conn.execute("DELETE FROM chat_history WHERE session_id = ?", (session_id,))
+            conn.commit()
+        
+        # 2. Clear agent checkpoint
+        clear_checkpoint(session_id)
+        
+        return {"status": "reset"}
+    except Exception as e:
+        logger.error(f"Reset error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to reset session.")

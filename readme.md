@@ -58,7 +58,7 @@ The ingestion pipeline natively parses and vectorizes a wide array of document t
 * **Microsoft Office:** `.docx` (Word), `.xlsx` (Excel), `.pptx` (PowerPoint)
 * **Structured Data:** `.json`, `.html`, `.xml` (Safely parsed via BeautifulSoup to prevent vector pollution)
 
-**PDF OCR Fallback:** When a PDF contains less than 100 characters of extractable text (e.g., scanned images), the pipeline automatically invokes **Azure Document Intelligence** to perform OCR. This ensures image‑based PDFs are still searchable and queryable, while text‑based PDFs are processed instantly without consuming OCR quota.
+**PDF OCR Fallback:** When a PDF contains less than 100 characters of extractable text (e.g., scanned images), the pipeline automatically invokes **local Tesseract OCR** (via `pytesseract`) to perform OCR. This ensures image‑based PDFs are still searchable and queryable, while text‑based PDFs are processed instantly – completely free, with no API limits or external dependencies. The OCR is configurable via the `ENABLE_OCR` environment variable.
 
 ### Multi‑Tenant Security by Design
 The system was rebuilt to serve **multiple isolated users** without the overhead of a full OAuth provider. Instead, the React frontend uses the **Web Crypto API** to compute a SHA‑256 hash of the username + password. This hex string becomes the `session_id` (and `owner_id`). The backend never sees the raw credentials. All data (PostgreSQL rows and ChromaDB vectors) are tagged with this `owner_id`, and every query, tool call, and vector retrieval applies a strict filter. The result: **zero‑effort tenant isolation** with no external identity provider.
@@ -67,6 +67,7 @@ The system was rebuilt to serve **multiple isolated users** without the overhead
 1. **Cost & Latency Elimination:** We generate text embeddings *locally* via the `sentence-transformers` library and HuggingFace models. We bypass embedding APIs, avoiding network bottlenecks during large file ingestion.
 2. **Low-Latency UX:** Large AI reasoning loops take time. By utilizing a custom **Server-Sent Events (SSE)** pipeline, the AI's internal "thoughts" (tool selections) and generation tokens are streamed directly to the React UI in real-time. No loading spinners; rapid feedback.
 3. **Resource‑Aware Deployment:** The platform runs on memory‑constrained Azure VMs. To prevent OOM crashes, a **hourly garbage collector** purges all documents older than 24 hours—both from PostgreSQL and ChromaDB—reclaiming disk and memory.
+4. **Zero‑Cost Local OCR:** Instead of relying on external OCR APIs, we integrated Tesseract OCR directly into the pipeline. This eliminates per‑page costs, avoids network latency, and gives us full control over accuracy and resource usage (DPI, page limits, and timeout).
 
 ---
 
@@ -191,13 +192,14 @@ The platform now handles **asynchronous document processing** with a two‑phase
   - If `chunk_count < 0`, it informs the user that the file could not be processed (e.g., empty or unsupported format) and suggests re‑uploading a valid file.
 - **Graceful Retry:** On slow systems (like Azure B‑series VMs), the agent automatically retries the database query after a short delay if it initially sees no active files but the count is >0. This provides a much smoother user experience during the ingestion phase.
 
-### 9. Conditional OCR Fallback (Azure Document Intelligence)
-Scanned documents and image‑only PDFs are now fully supported via **Azure Document Intelligence OCR**:
+### 9. Conditional OCR Fallback (Local Tesseract)
+Scanned documents and image‑only PDFs are now fully supported via **local Tesseract OCR**:
 
 - **Smart Activation:** OCR is only triggered when PyPDF extracts fewer than 100 characters from a PDF – meaning text‑based files are processed instantly, preserving performance.
-- **Azure Free Tier:** Uses the generous **F0 tier** (500 pages/month free, no credit card required) to keep costs at zero for light usage.
-- **Zero Pipeline Disruption:** The OCR fallback runs within the existing async ingestion pipeline; if OCR fails or is disabled, the system gracefully falls back to the original (limited) text extraction.
-- **Configurable:** Controlled by the `ENABLE_OCR` environment variable – disable it to avoid any API calls.
+- **Zero Cost & No Limits:** No API calls, no page‑per‑month quotas – completely free and self‑contained.
+- **Resource‑Aware:** DPI and page‑limit are configurable (`OCR_DPI`, `MAX_PAGES` in `ocr.py`) to balance accuracy and memory usage on constrained VMs.
+- **Zero Pipeline Disruption:** If OCR fails or is disabled, the system gracefully falls back to the original (limited) text extraction.
+- **Configurable:** Controlled by the `ENABLE_OCR` environment variable – disable it to avoid the OCR overhead.
 
 ---
 
@@ -287,6 +289,7 @@ frontend/
 * **Node.js 18+** & npm
 * **Python 3.11+** (If running backend natively)
 * A Google Gemini API Key
+* **System dependencies for OCR (if running natively):** `poppler-utils` and `tesseract-ocr` (automatically installed inside the Docker container)
 
 ### 2. Environment Configuration
 Create a `.env` file in the `/backend` directory:
@@ -307,10 +310,8 @@ DB_PASSWORD=super_secure_password
 # Gateway Settings
 API_PORT=8000
 
-# OCR (Azure Document Intelligence) – optional
-ENABLE_OCR=false
-AZURE_DI_ENDPOINT=your_azure_endpoint_here
-AZURE_DI_KEY=your_azure_key_here
+# Local OCR (Tesseract) – enable/disable
+ENABLE_OCR=true   # Set to true to use local Tesseract OCR for scanned PDFs
 ```
 
 > **Note:** To enable OCR for scanned PDFs, set `ENABLE_OCR=true` and provide your Azure Document Intelligence credentials (free tier available). When disabled, the system falls back to standard text extraction.
@@ -371,6 +372,15 @@ cd agentic-document-intelligence-platform/backend
 nano .env 
 # Add your LLM_API_KEY, DB_PASSWORD, etc.
 ```
+
+### 4a. Install System Dependencies (if running without Docker)
+If you are running the application **natively** on the VM (not in Docker), install the required system packages for OCR:
+
+```bash
+sudo apt update && sudo apt install poppler-utils tesseract-ocr tesseract-ocr-eng -y
+```
+
+**Note:** In Docker, these dependencies are already included in the Dockerfile – no manual installation needed.
 
 ### 5. Configure Azure DNS Label (Free Domain)
 To provision a free SSL certificate via Let's Encrypt, you cannot use a raw IP address. 
@@ -461,12 +471,13 @@ All tests are designed to run in CI/CD pipelines (GitHub Actions, etc.) and ensu
 ---
 
 ## 💡 Future Scalability (Roadmap)
-* **Conditional OCR Fallback** ✅ *Implemented* – Azure Document Intelligence OCR for scanned PDFs (free tier, 500 pages/month).
+* **Conditional OCR Fallback** ✅ *Implemented* – local Tesseract OCR for scanned PDFs (no limits, no cost).
 * **GHCR Container Registry:** Shift the Docker build process from the Azure VM to GitHub Actions runners. Push compiled images to GHCR and configure the VM to only pull pre-built images. This eliminates deployment downtime, prevents OOM crashes on the 1 GiB server, and isolates build failures from production.
 * **Redis Caching:** Implement caching on `/api/v1/tools/document_count` to prevent database thrashing under high UI concurrency.
 * **Pessimistic Locking:** Add transaction locks in PostgreSQL for the `is_active` toggle to prevent race conditions when multiple admins modify context simultaneously.
 * **OAuth2 Authentication:** Integrate standard JWT/OAuth flows to create multi-tenant workspaces with granular permissions on document visibility.
 * **OpenTelemetry:** Add distributed tracing across the FastAPI gateway, LangGraph orchestrator, and Gemini API to identify bottlenecks in the reasoning loop visually.
+* **Admin Dashboard:** Build a secure admin interface to monitor active sessions, document counts, and system health metrics in real-time.
 
 ## Copyright
 **Copyright (c) 2026 [Shriram Govindarajan](https://shriram.is-a.dev). All Rights Reserved.** This repository is available for review purposes only in connection with job applications. No license is granted to use, copy, distribute, or modify this code.

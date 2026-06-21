@@ -192,6 +192,16 @@ async def agent_node(state: AgentState) -> dict:
     response = await llm_with_tools.ainvoke(messages)
     return {"messages": [response]}
 
+def clear_checkpoint(thread_id: str) -> None:
+    """Delete all checkpoints for a given thread_id from the in-memory saver."""
+    # MemorySaver stores checkpoints in a dict: {thread_id: {checkpoint_id: state}}
+    # We remove the entire thread entry.
+    if hasattr(memory, "storage") and thread_id in memory.storage:
+        del memory.storage[thread_id]
+        logger.info(f"Cleared checkpoint for thread {thread_id}")
+    else:
+        logger.warning(f"No checkpoint found for thread {thread_id}")
+
 workflow = StateGraph(AgentState)
 workflow.add_node("agent", agent_node)
 tool_node = ToolNode(tools)

@@ -77,5 +77,11 @@ export const api = {
     method: 'DELETE',
   });
   if (!res.ok) throw new Error('Failed to clear chat history.');
+},
+  async resetSession(sessionId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/session/reset?session_id=${encodeURIComponent(sessionId)}`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error('Failed to reset session.');
 }
 };
