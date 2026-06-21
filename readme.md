@@ -51,11 +51,14 @@ This platform implements an **Autonomous Agent**. Instead of a dumb pipe, the sy
 3. *"Are they just saying hello?"* -> It answers conversationally without wasting database compute.
 
 ### 📚 Supported File Formats
-The ingestion pipeline natively parses and vectorizes a wide array of document types without relying on heavy, external OCR APIs:
+The ingestion pipeline natively parses and vectorizes a wide array of document types:
+
 * **Standard Text:** `.txt`, `.md`, `.rtf`, `.csv`
 * **Documents & E-Books:** `.pdf`, `.epub`, `.odt`
 * **Microsoft Office:** `.docx` (Word), `.xlsx` (Excel), `.pptx` (PowerPoint)
 * **Structured Data:** `.json`, `.html`, `.xml` (Safely parsed via BeautifulSoup to prevent vector pollution)
+
+**PDF OCR Fallback:** When a PDF contains less than 100 characters of extractable text (e.g., scanned images), the pipeline automatically invokes **Azure Document Intelligence** to perform OCR. This ensures image‑based PDFs are still searchable and queryable, while text‑based PDFs are processed instantly without consuming OCR quota.
 
 ### Multi‑Tenant Security by Design
 The system was rebuilt to serve **multiple isolated users** without the overhead of a full OAuth provider. Instead, the React frontend uses the **Web Crypto API** to compute a SHA‑256 hash of the username + password. This hex string becomes the `session_id` (and `owner_id`). The backend never sees the raw credentials. All data (PostgreSQL rows and ChromaDB vectors) are tagged with this `owner_id`, and every query, tool call, and vector retrieval applies a strict filter. The result: **zero‑effort tenant isolation** with no external identity provider.
@@ -180,6 +183,22 @@ Chat history is no longer ephemeral. All user and assistant messages are automat
 ### 7. Automated CI/CD Pipeline
 Deployments are fully automated via GitHub Actions. Pushes to the `main` branch trigger a secure SSH workflow that synchronizes the repository on the Azure VM, safely halts containers to prevent OOM errors, rebuilds the Docker environment, and aggressively prunes dangling images to conserve storage on the constrained VM disk.
 
+### 8. Resilient Ingestion Pipeline with Real‑time User Feedback
+The platform now handles **asynchronous document processing** with a two‑phase metadata commit:
+- **Immediate Metadata Insertion:** As soon as a file is uploaded, its metadata (filename, type, owner) is written to PostgreSQL *before* the heavy extraction/embedding work begins. This ensures the agent instantly “sees” the document, eliminating the race condition where users would ask questions immediately after upload and receive “no active documents.”
+- **Intelligent Processing Status:** The agent’s `search_active_documents` tool checks the `chunk_count` field:
+  - If `chunk_count == 0`, it politely tells the user: *“Your document(s) are still being processed… please wait 5–10 seconds.”*
+  - If `chunk_count < 0`, it informs the user that the file could not be processed (e.g., empty or unsupported format) and suggests re‑uploading a valid file.
+- **Graceful Retry:** On slow systems (like Azure B‑series VMs), the agent automatically retries the database query after a short delay if it initially sees no active files but the count is >0. This provides a much smoother user experience during the ingestion phase.
+
+### 9. Conditional OCR Fallback (Azure Document Intelligence)
+Scanned documents and image‑only PDFs are now fully supported via **Azure Document Intelligence OCR**:
+
+- **Smart Activation:** OCR is only triggered when PyPDF extracts fewer than 100 characters from a PDF – meaning text‑based files are processed instantly, preserving performance.
+- **Azure Free Tier:** Uses the generous **F0 tier** (500 pages/month free, no credit card required) to keep costs at zero for light usage.
+- **Zero Pipeline Disruption:** The OCR fallback runs within the existing async ingestion pipeline; if OCR fails or is disabled, the system gracefully falls back to the original (limited) text extraction.
+- **Configurable:** Controlled by the `ENABLE_OCR` environment variable – disable it to avoid any API calls.
+
 ---
 
 ## 🔍 Core File Functionality Reference
@@ -287,7 +306,14 @@ DB_PASSWORD=super_secure_password
 
 # Gateway Settings
 API_PORT=8000
+
+# OCR (Azure Document Intelligence) – optional
+ENABLE_OCR=false
+AZURE_DI_ENDPOINT=your_azure_endpoint_here
+AZURE_DI_KEY=your_azure_key_here
 ```
+
+> **Note:** To enable OCR for scanned PDFs, set `ENABLE_OCR=true` and provide your Azure Document Intelligence credentials (free tier available). When disabled, the system falls back to standard text extraction.
 
 ### 3. Local Development Setup
 **Start the Backend (Docker):**
@@ -409,7 +435,7 @@ To ensure robust CI/CD, the project includes both backend and frontend test suit
 
 ### Backend Tests (Python / Pytest)
 * **Unit Tests (`test_ingestion.py`):** Verifies text chunking, `owner_id` metadata attachment, and garbage collector logic (mocking).
-* **Integration Tests (`test_integration.py`):** End‑to‑end tests have been extended to validate that messages are correctly persisted and retrieved via the new `/api/v1/chat/history` endpoint, ensuring that chat history survives a session reload and remains isolated per tenant.
+* **Integration Tests (`test_integration.py`):** End‑to‑end tests have been extended to validate that messages are correctly persisted and retrieved via the new `/api/v1/chat/history` endpoint, ensuring that chat history survives a session reload and remains isolated per tenant. The integration tests now include a `wait_for_embedding()` helper that polls the document endpoint until the `chunk_count` becomes positive. This ensures tests only proceed after the background embedding completes, eliminating flaky test failures due to processing delays.
 
 **Run backend tests locally:**
 ```bash
@@ -435,6 +461,7 @@ All tests are designed to run in CI/CD pipelines (GitHub Actions, etc.) and ensu
 ---
 
 ## 💡 Future Scalability (Roadmap)
+* **Conditional OCR Fallback** ✅ *Implemented* – Azure Document Intelligence OCR for scanned PDFs (free tier, 500 pages/month).
 * **GHCR Container Registry:** Shift the Docker build process from the Azure VM to GitHub Actions runners. Push compiled images to GHCR and configure the VM to only pull pre-built images. This eliminates deployment downtime, prevents OOM crashes on the 1 GiB server, and isolates build failures from production.
 * **Redis Caching:** Implement caching on `/api/v1/tools/document_count` to prevent database thrashing under high UI concurrency.
 * **Pessimistic Locking:** Add transaction locks in PostgreSQL for the `is_active` toggle to prevent race conditions when multiple admins modify context simultaneously.
