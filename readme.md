@@ -77,78 +77,86 @@ The application enforces a strict separation of concerns between the **Write Pat
 
 ```mermaid
 flowchart TD
-    %% Define Node Styles
-    classDef frontend fill:#61dafb,stroke:#333,stroke-width:2px,color:#000;
-    classDef backend fill:#389b82,stroke:#333,stroke-width:2px,color:#fff;
-    classDef db fill:#f2a900,stroke:#333,stroke-width:2px,color:#000;
-    classDef external fill:#ff9900,stroke:#333,stroke-width:2px,color:#000;
-    classDef agent fill:#9b59b6,stroke:#333,stroke-width:2px,color:#fff;
-    classDef security fill:#e74c3c,stroke:#333,stroke-width:2px,color:#fff;
+    %% Define Styling Themes
+    classDef client fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
+    classDef gateway fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+    classDef orchestrator fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
+    classDef storage fill:#fff8e1,stroke:#f57f17,stroke-width:2px;
+    classDef external fill:#ffe0b2,stroke:#e65100,stroke-width:2px;
 
     %% 1. Client Tier
-    subgraph Tier1 ["1. Client Tier"]
-        Client["React Frontend<br/>(Zustand + SSE)"]:::frontend
-        Hasher["Web Crypto SHA-256"]:::security
-        
-        %% Kept internal for neatness
-        Client <-->|"1. Auth Cycle"| Hasher
+    subgraph ClientTier ["1. Client Tier"]
+        UI["React Frontend<br/>(Zustand Store)"]:::client
+        Hasher["Web Crypto API<br/>(SHA-256 Hasher)"]:::client
+        UI <-->|"Hash Credentials<br/>for Session ID"| Hasher
     end
 
     %% 2. API Gateway Tier
-    subgraph Tier2 ["2. API Gateway"]
-        API["FastAPI Gateway<br/>(Async HTTP + SSE)"]:::backend
+    subgraph GatewayTier ["2. API Gateway"]
+        API["FastAPI Gateway<br/>(Async HTTP / SSE Streams)"]:::gateway
+        Scheduler["APScheduler<br/>(Hourly Cleanups)"]:::gateway
     end
 
-    %% 3. Orchestration & Processing Tier
-    subgraph Tier3 ["3. Orchestration & Processing"]
-        Worker["Ingestion Pipeline"]:::backend
-        LangGraph["LangGraph Orchestrator"]:::agent
-        Memory["MemorySaver"]:::agent
-        ToolNode["System Tool Node"]:::backend
-        Scheduler["APScheduler"]:::backend
+    %% 3. Ingestion Pipeline (Write Path)
+    subgraph IngestionTier ["3. Async Ingestion Pipeline"]
+        Worker["DocumentProcessor<br/>(process_and_store)"]:::gateway
+        PyPDF["PyPDF Parser<br/>(Text Extraction)"]:::gateway
+        OCRCheck{"Text Chars < 100 &<br/>ENABLE_OCR == true?"}:::gateway
+        Tesseract["Tesseract OCR<br/>(Local Image Fallback)"]:::gateway
+        Embedder["MiniLM Embedder<br/>(add_texts)"]:::gateway
 
-        %% Internal Tier 3 interactions
-        LangGraph <-->|"D. State Checkpoint"| Memory
-        LangGraph -->|"F. Protocol Query"| ToolNode
-        
-        %% Invisible link to balance Worker and Scheduler horizontally
-        Worker ~~~ Scheduler
+        Worker --> PyPDF
+        PyPDF --> OCRCheck
+        OCRCheck -- Yes --> Tesseract
+        OCRCheck -- No --> Embedder
+        Tesseract --> Embedder
     end
 
-    %% 4. Data Storage Tier
-    subgraph Tier4 ["4. Data Storage"]
-        VectorDB[("ChromaDB<br/>(Semantic Vectors)")]:::db
-        SQL[("PostgreSQL<br/>(Metadata & History)")]:::db
+    %% 4. Agentic Orchestration (Read Path)
+    subgraph AgentTier ["4. LangGraph Orchestration"]
+        AgentNode["Orchestrator Node<br/>(ReAct Logic Loop)"]:::orchestrator
+        ToolNode["System Tool Node<br/>(Metadata & Search)"]:::orchestrator
+        Memory["MemorySaver<br/>(Thread Checkpointer)"]:::orchestrator
+
+        AgentNode <-->|"Check/Save State"| Memory
+        AgentNode <-->|"Route Tool / Return Data"| ToolNode
     end
 
-    %% 5. External Services
-    subgraph Tier5 ["5. External Services"]
-        LLM["Google Gemini API"]:::external
+    %% 5. Storage Tier
+    subgraph StorageTier ["5. Data Storage"]
+        SQL[("Relational DB<br/>(PostgreSQL / SQLite)")]:::storage
+        VectorDB[("ChromaDB<br/>(Semantic Vectors)")]:::storage
+    end
+
+    %% 6. External Services
+    subgraph ExternalTier ["6. External Tier"]
+        Gemini["Google Gemini API<br/>(LLM Reasoning)"]:::external
     end
 
     %% ==========================================
-    %% CORE ROUTING
+    %% FLOW CONNECTIONS
     %% ==========================================
+
+    %% INGESTION FLOWS (WRITE PATH)
+    UI -->|"Upload File + Session ID"| API
+    API -->|"Dispatch Background Task"| Worker
+    Worker -->|"Immediate Commit<br/>(chunk_count = 0)"| SQL
+    Embedder -->|"Store Chunks &<br/>owner_id Metadata"| VectorDB
+    Embedder -->|"Update Status &<br/>Final Chunk Count"| SQL
+
+    %% CHAT FLOWS (READ PATH)
+    UI <-->|"Post Prompt / Stream SSE Tokens"| API
+    API --->|"Read/Write Chat History"| SQL
+    API <-->|"Invoke Graph (thread_id)"| AgentNode
+    AgentNode <-->|"Predict Tools / Response"| Gemini
     
-    Client <-->|"3, A: User Requests<br/>M: SSE Stream Up"| API
-    API <-->|"B: Invoke Graph<br/>L: Yield Event Stream"| LangGraph
-    
-    %% Standard downward flows
-    API -->|"4. Background Task"| Worker
-    API --->|"H. Save User Msg (Pre‑Stream)"| SQL
-    
-    Worker -->|"5. Save Metadata"| SQL
-    Worker -->|"6. Store Embeddings"| VectorDB
-    
-    LangGraph <-->|"C. Prompt / Tokens"| LLM
-    LangGraph -->|"E. Similarity Search"| VectorDB
-    API -->|"I. Save AI Msg (Post‑Stream)"| SQL
-    
-    ToolNode -->|"G. DB Read/Write"| SQL
-    
-    %% Background / Garbage Collection flows
-    Scheduler -.->|"J. Cleanup Docs/Chat"| SQL
-    Scheduler -.->|"K. Delete Vectors"| VectorDB
+    %% Tool Executions
+    ToolNode -->|"Verify Active Files & Metadata"| SQL
+    ToolNode -->|"Query Chunks w/ owner_id Filter"| VectorDB
+
+    %% AUTOMATED MAINTENANCE
+    Scheduler -.->|"Purge Records & Logs (>24h)"| SQL
+    Scheduler -.->|"Delete Expired Vectors"| VectorDB
 ```
 
 ---
@@ -467,6 +475,28 @@ npm test
 ```
 
 All tests are designed to run in CI/CD pipelines (GitHub Actions, etc.) and ensure that both the backend and frontend remain stable as the codebase evolves.
+
+---
+
+## ⚖️ Architectural Trade-offs & Production Notes
+
+This platform was explicitly optimized to run reliably within a resource-constrained environment (**Microsoft Azure B-Series VM with 1 GiB RAM**). To achieve this deployment goal on a zero-dollar budget, certain engineering trade-offs were made. Acknowledging these limitations forms the foundational roadmap for enterprise-grade scaling:
+
+### 1. Synchronous Database I/O on the Async Event Loop
+* **Current State:** Relational database transactions (via raw `psycopg2` / `sqlite3`) are called synchronously inside some FastAPI `async def` routes. For low-concurrency demonstrations, this introduces negligible latency.
+* **Production Path:** In a high-concurrency environment, synchronous blocking I/O starves FastAPI's single-threaded event loop. Production scaling requires migrating to an asynchronous engine like **SQLAlchemy (Asyncio)** combined with a non-blocking database driver like **`asyncpg`**.
+
+### 2. Connection Pool Thread Safety
+* **Current State:** The PostgreSQL interface initializes a `SimpleConnectionPool`. While lightweight, this pool type is not thread-safe when background file extraction tasks utilize `asyncio.to_thread()`.
+* **Production Path:** Transitioning to `ThreadedConnectionPool` (or utilizing connection proxies like **PgBouncer**) is required to safely handle concurrent, multi-threaded file ingestion pipelines across multiple concurrent tenants.
+
+### 3. Local Embedding Model Lifecycles
+* **Current State:** The local `HuggingFaceEmbeddings` model is instantiated contextually within utility scopes to allow the memory-constrained OS to reclaim volatile RAM aggressively when the application is idle.
+* **Production Path:** Re-instantiating transformer weights introduces heavy CPU overhead per lifecycle call. For true multi-user production workloads, the embedding model should either be handled as a cached **Global Singleton** on server startup or completely offloaded to a managed remote service (e.g., **Google Gemini Embeddings API**).
+
+### 4. Relational vs. Vector Atomicity
+* **Current State:** If an exception occurs inside ChromaDB during automated garbage collection cleanups, the platform logs the error but still executes the primary key deletion inside PostgreSQL to protect database reliability. This presents a minor risk of orphaned vector leakage inside the local collection files.
+* **Production Path:** Implementing distributed transactions or a strict multi-phase commit (2PC) architecture would guarantee absolute data synchronization across both segregated storage systems.
 
 ---
 
